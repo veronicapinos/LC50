@@ -1,0 +1,1333 @@
+---
+title: "CV - regresión"
+author: "Verónica Pinos Vélez"
+date: "19/04/2021"
+output:
+  pdf_document:
+    latex_engine: xelatex
+    toc: yes
+    toc_depth: 2
+  word_document:
+    toc: yes
+    toc_depth: '2'
+  html_document:
+    toc: yes
+    toc_depth: 2
+    toc_float: yes
+subtitle: PEC2
+---
+```{r, echo=FALSE}
+htmltools::img(src = knitr::image_uri( "logo_uoc_petit.png"), 
+               alt = 'logo UOC', 
+               style = 'position:absolute; top:0; right:0; padding:10px;')
+htmltools::img(src = knitr::image_uri( "logo_ub_petit.png"), 
+               alt = 'logo UB', 
+               style = 'position:absolute; top:0; left:0; padding:10px;')
+```
+<style type="text/css">
+
+h1.title {
+  font-size: 18px;
+  color: DarkRed;
+  text-align: center;
+}
+h3.subtitle {
+  font-size: 18px;
+  color: DarkBlue;
+  text-align: center;
+}
+h4.author { /* Header 4 - and the author and data headers use this too  */
+    font-size: 18px;
+  font-family: "Times New Roman", Times, serif;
+  color: DarkBlue;
+  text-align: center;
+}
+h4.date { /* Header 4 - and the author and data headers use this too  */
+  font-size: 18px;
+  font-family: "Times New Roman", Times, serif;
+  color: DarkBlue;
+  text-align: center;
+}
+</style>
+
+
+```{r setup, include = FALSE}
+
+# knitr options
+knitr::opts_chunk$set(echo = TRUE, 
+                      message = FALSE, 
+                      warning = FALSE, 
+                      comment = NULL, 
+                      prompt = TRUE, 
+                      tidy = FALSE, 
+                      fig.width = 7, 
+                      fig.height = 7, 
+                      fig_caption = TRUE,
+                      cache = TRUE)
+
+```
+
+```{r libraries, include = FALSE}
+
+library(knitr)
+library("citr")
+library(readr)
+library(tidyverse)
+library(caret)
+library(ggpubr) 
+library(skimr) # summary gráfico
+library(nortest) # pruebas de normalidad
+library(GGally) # correlación
+library(psych) # correlación
+library(PerformanceAnalytics ) # correlaciones
+library(modelgrid) # entrenar simultáneamente varios modelos
+
+```
+
+\newpage
+
+# 0. Base de datos
+
+```{r}
+
+qsar.aq.tox <- read_delim("qsar_aquatic_toxicity.csv", 
+                          ";", escape_double = FALSE, 
+                          trim_ws = TRUE)
+
+#qsar.aq.tox$LOG.LC50 <- round(qsar.aq.tox$LOG.LC50 , 1)
+
+# Datos
+
+kable(head(round(qsar.aq.tox, 2), 10))
+
+```
+
+\newpage
+
+# 1 Exploración de los datos
+
+## 1.1 Estadística descriptiva
+
+```{r}
+
+# Datos sin escalar
+kable((summary(qsar.aq.tox)))
+
+# Datos escalados
+qsar.aq.tox.esc <-  data.frame(scale(qsar.aq.tox))
+kable((summary(qsar.aq.tox.esc)))
+
+```
+
+## 1.2 Valores ausentes
+
+```{r}
+
+any(!complete.cases(qsar.aq.tox))
+
+```
+
+No existen valores ausentes
+
+\newpage
+
+## 1.3 resumen
+
+```{r}
+
+skim_to_wide(qsar.aq.tox)
+
+```
+
+\newpage
+
+## 1.4 Distribución de las variables
+
+```{r}
+
+
+p1 <- ggplot(data = qsar.aq.tox, aes(x = TPSA.Tot)) +
+      geom_density(fill = "steelblue", alpha = 0.8) +
+      geom_rug(alpha = 0.1) +
+      scale_x_continuous(labels = scales::comma) +
+      labs(title = "TPSA.Tot") +
+      theme_bw() 
+
+p2 <- ggplot(data = qsar.aq.tox, aes(x = SAacc)) +
+      geom_density(fill = "steelblue", alpha = 0.8) +
+      geom_rug(alpha = 0.1) +
+      scale_x_continuous(labels = scales::comma) +
+      labs(title = "SAacc") +
+      theme_bw() 
+
+p3 <- ggplot(data = qsar.aq.tox, aes(x = H.050)) +
+      geom_density(fill = "steelblue", alpha = 0.8) +
+      geom_rug(alpha = 0.1) +
+      scale_x_continuous(labels = scales::comma) +
+      labs(title = "H.050") +
+      theme_bw() 
+
+p4 <- ggplot(data = qsar.aq.tox, aes(x = MLOGP)) +
+      geom_density(fill = "steelblue", alpha = 0.8) +
+      geom_rug(alpha = 0.1) +
+      scale_x_continuous(labels = scales::comma) +
+      labs(title = "MLOGP") +
+      theme_bw() 
+
+p5 <- ggplot(data = qsar.aq.tox, aes(x = RDCHI)) +
+      geom_density(fill = "steelblue", alpha = 0.8) +
+      geom_rug(alpha = 0.1) +
+      scale_x_continuous(labels = scales::comma) +
+      labs(title = "RDCHI") +
+      theme_bw()
+
+p6 <- ggplot(data = qsar.aq.tox, aes(x = GATS1p)) +
+      geom_density(fill = "steelblue", alpha = 0.8) +
+      geom_rug(alpha = 0.1) +
+      scale_x_continuous(labels = scales::comma) +
+      labs(title = "GATS1p") +
+      theme_bw() 
+
+p7 <- ggplot(data = qsar.aq.tox, aes(x = nN)) +
+      geom_density(fill = "steelblue", alpha = 0.8) +
+      geom_rug(alpha = 0.1) +
+      scale_x_continuous(labels = scales::comma) +
+      labs(title = "nM") +
+      theme_bw() 
+
+p8 <- ggplot(data = qsar.aq.tox, aes(x = C.040)) +
+      geom_density(fill = "steelblue", alpha = 0.8) +
+      geom_rug(alpha = 0.1) +
+      scale_x_continuous(labels = scales::comma) +
+      labs(title = "C.040") +
+      theme_bw() 
+
+p9 <- ggplot(data = qsar.aq.tox, aes(x = LOG.LC50)) +
+      geom_density(fill = "red", alpha = 0.8) +
+      geom_rug(alpha = 0.1) +
+      scale_x_continuous(labels = scales::comma) +
+      labs(title = "LOG.LC50") +
+      theme_bw() 
+
+ggarrange(p1, p2, p3, p4, p5, p6, p7, p8, p9, ncol = 3, 
+          align = "v")
+
+```
+ 
+
+\newpage
+
+## 1.5 pruebas de normalidad
+
+
+```{r}
+
+lillie.test(qsar.aq.tox$TPSA.Tot)
+lillie.test(qsar.aq.tox$SAacc)
+lillie.test(qsar.aq.tox$H.050)
+lillie.test(qsar.aq.tox$MLOGP)
+lillie.test(qsar.aq.tox$RDCHI)
+lillie.test(qsar.aq.tox$GATS1p)
+lillie.test(qsar.aq.tox$nN)
+lillie.test(qsar.aq.tox$C.040)
+lillie.test(qsar.aq.tox$LOG.LC50)
+
+```
+
+salvo MLOG, ninguna presenta una distribución normal. 
+
+\newpage
+
+## 1.6 Correlación variables
+
+```{r}
+
+# Todas las variables
+ggscatmat(data = qsar.aq.tox, alpha = 0.1)
+pairs.panels(qsar.aq.tox, pch = 20)
+chart.Correlation(qsar.aq.tox, histogram = T, pch = 20)
+
+```
+
+\newpage
+
+# 2. Modelos
+
+## Separación en entrenamiento y test
+
+```{r}
+
+# Separamos los datos 
+set.seed(1234) # Fijamos la semilla para obtener los mismos resultados
+index <- createDataPartition(qsar.aq.tox$LOG.LC50, 
+                             p = .80, 
+                             list = FALSE)
+
+datos.train <- qsar.aq.tox[index,] # crea train desde el índice 
+datos.test <- qsar.aq.tox[-index,] # crea test desde el índice
+
+```
+
+\newpage
+Comprobamos la partición de entrenamiento - train
+
+```{r}
+# Comprobamos
+
+skim_to_wide(datos.train) 
+
+ggscatmat(datos.train)
+
+```
+
+\newpage
+Comprobamos la partición de prueba o test
+
+```{r}
+# Comprobamos
+
+skim_to_wide(datos.test)
+
+ggscatmat(datos.test)
+
+```
+
+\newpage
+
+## Validación Cruzada
+
+```{r}
+
+# Cambio k = 5
+
+cv.index <- createFolds(y = datos.train$LOG.LC50,
+                        k = 5,
+                        list = TRUE,
+                        returnTrain = TRUE)
+
+fitControl <- trainControl(index = cv.index,
+                           method = "cv",
+                           number = 5,
+                           #selectionFunction = "tolerance"
+                           )
+
+
+```
+
+
+
+\newpage
+# 3. Optimización de los modelos elegidos
+
+## 3.1 Máquina de Vectores de Soporte radial
+
+```{r}
+
+set.seed(1234)
+
+# Entrenamiento del modelo con los 8 predictores
+
+hiperparametros <- expand.grid(sigma = c(0.1, 0.2, 0.22, 0.3),
+                               C = c(0.5, 0.75, 1))
+
+
+modelo.svm.r <- train(LOG.LC50 ~ . , 
+                 data = datos.train,
+                 method = "svmRadial",
+                 trControl = fitControl,
+                 verbose = FALSE,
+                 preProc = c("scale", "center"),
+                 metric = "Rsquared",
+                 tuneGrid = hiperparametros
+                 )
+               
+kable(round(modelo.svm.r$results, 3))
+
+ggplot(modelo.svm.r)
+
+kable(modelo.svm.r$bestTune)
+
+# Entrenamiento del modelo con los 4 predictores
+
+hiperparametros <- expand.grid(sigma = c(1.5, 1.75, 2, 3, 3.5),
+                               C = c(1, 1.25, 1.5))
+
+modelo.svm.r.p <- train(LOG.LC50 ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "svmRadial", 
+                    trControl = fitControl,
+                    verbose = FALSE,
+                    preProc = c("scale", "center"),
+                    metric = "Rsquared",
+                    tuneGrid = hiperparametros
+                    )
+               
+kable(round(modelo.svm.r.p$results, 3))
+
+ggplot(modelo.svm.r.p)
+
+kable(modelo.svm.r.p$bestTune)
+
+```
+
+*Predicciones*
+
+```{r}
+
+y.modelo.svm.r <- predict(modelo.svm.r, datos.test)
+y.modelo.svm.r.p <- predict(modelo.svm.r.p, datos.test)
+
+```
+
+*Gráfica*
+
+```{r}
+
+plot(x = datos.test$LOG.LC50, y = y.modelo.svm.r, 
+     xlab ='Valor observado', ylab = 'Predicción')
+abline(a = 0, b = 1, lty ='dashed')
+
+cor(datos.test$LOG.LC50, y.modelo.svm.r)
+postResample(datos.test$LOG.LC50, y.modelo.svm.r)
+
+plot(x = datos.test$LOG.LC50, y = y.modelo.svm.r.p, 
+     xlab ='Valor observado', ylab = 'Predicción')
+abline(a = 0, b = 1, lty ='dashed')
+
+cor(datos.test$LOG.LC50, y.modelo.svm.r.p)
+postResample(datos.test$LOG.LC50, y.modelo.svm.r.p)
+
+```
+
+\newpage
+
+## 3.2 Árbol de modelo Cubist
+
+```{r}
+
+set.seed(1234)
+
+# Entrenamiento del modelo con los 8 predictores
+
+hiperparametros <-  expand.grid(committees = c(20, 25, 30, 35),
+                                neighbors = c(6, 7, 8, 9)
+                                )
+
+modelo.c <- train(LOG.LC50 ~., data = datos.train, 
+                 method = "cubist", 
+                 trControl = fitControl,
+                 verbose = FALSE,
+                 metric = "Rsquared",
+                 preProc = c("scale", "center"),
+                 tuneGrid = hiperparametros)
+
+kable(round(modelo.c$results, 3))
+
+ggplot(modelo.c)
+
+kable(modelo.c$bestTune)
+
+varImp(modelo.c)
+
+# Entrenamiento del modelo con los 4 predictores
+
+hiperparametros <-  expand.grid(committees = c(35, 40, 42, 44),
+                                neighbors = c(2, 3, 4, 5, 6)
+                                )
+
+modelo.c.p <- train(LOG.LC50 ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "cubist", 
+                    trControl = fitControl,
+                    verbose = FALSE,
+                    preProc = c("scale", "center"),
+                    metric = "Rsquared",
+                    tuneGrid = hiperparametros
+                    )
+
+kable(round(modelo.c.p$results, 3))
+
+ggplot(modelo.c.p)
+
+kable(modelo.c.p$bestTune)
+
+varImp(modelo.c.p)
+
+```
+
+*Predicciones*
+
+```{r}
+
+y.modelo.c <- predict(modelo.c, datos.test)
+y.modelo.c.p <- predict(modelo.c.p, datos.test)
+
+```
+
+*Gráfica*
+
+```{r}
+
+plot(x = datos.test$LOG.LC50, y = y.modelo.c, 
+     xlab ='Valor observado', ylab = 'Predicción')
+abline(a = 0, b = 1, lty ='dashed')
+
+cor(datos.test$LOG.LC50, y.modelo.c)
+postResample(datos.test$LOG.LC50, y.modelo.c)
+
+plot(x = datos.test$LOG.LC50, y = y.modelo.c.p, 
+     xlab ='Valor observado', ylab = 'Predicción')
+abline(a = 0, b = 1, lty ='dashed')
+
+cor(datos.test$LOG.LC50, y.modelo.c.p)
+postResample(datos.test$LOG.LC50, y.modelo.c.p)
+
+```
+
+
+```{r}
+
+save(modelo.c.p , file = 'LC50c.rda')
+
+```
+
+
+\newpage
+
+## 3.3 Random forest
+
+*Entrenamiento*
+
+```{r}
+
+set.seed(1234)
+
+# Entrenamiento del modelo con los 8 predictores
+
+# Breiman (2001) sugiere emplear el valor por defecto, la mitad y el doble:
+
+mtry.class <- sqrt(ncol(datos.train) - 1)
+hiperparametros <- data.frame(mtry = floor(c(mtry.class/2, 
+                                             mtry.class, 2*mtry.class)))
+
+# Mejores resultados con:
+  
+hiperparametros <-  data.frame(mtry = seq(1, 2, by = 0.05))
+
+modelo.rf <- train(LOG.LC50 ~ . , 
+                 data = datos.train, 
+                 method = "rf", 
+                 trControl = fitControl,
+                 verbose = FALSE,
+                 metric = "Rsquared",
+                 preProc = c("scale", "center"),
+                 tuneGrid = hiperparametros)
+
+
+kable(round(modelo.rf$results, 3))
+
+ggplot(modelo.rf)
+
+kable(modelo.rf$bestTune)
+
+varImp(modelo.rf)
+
+# Entrenamiento del modelo con los 4 predictores
+
+hiperparametros <-  data.frame(mtry = seq(1, 2, by = 0.05))
+
+modelo.rf.p <- train(LOG.LC50 ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "rf", 
+                    trControl = fitControl,
+                    verbose = FALSE,
+                    preProc = c("scale", "center"),
+                    metric = "Rsquared",
+                    tuneGrid = hiperparametros,
+                    keep.forest = TRUE
+                    )
+
+kable(round(modelo.rf.p$results, 3))
+
+ggplot(modelo.rf.p)
+
+kable(modelo.rf.p$bestTune)
+
+varImp(modelo.rf.p)
+
+```
+
+*Predicciones*
+
+```{r}
+
+y.modelo.rf <- predict(modelo.rf, datos.test)
+y.modelo.rf.p <- predict(modelo.rf.p, datos.test)
+
+```
+
+*Gráfica*
+
+```{r}
+
+plot(x = datos.test$LOG.LC50, y = y.modelo.rf, 
+     xlab ='Valor observado', ylab = 'Predicción')
+abline(a = 0, b = 1, lty ='dashed')
+
+cor(datos.test$LOG.LC50, y.modelo.rf)
+postResample(datos.test$LOG.LC50, y.modelo.rf)
+
+plot(x = datos.test$LOG.LC50, y = y.modelo.rf.p, 
+     xlab ='Valor observado', ylab = 'Predicción')
+abline(a = 0, b = 1, lty ='dashed')
+
+cor(datos.test$LOG.LC50, y.modelo.rf.p)
+postResample(datos.test$LOG.LC50, y.modelo.rf.p)
+
+```
+
+\newpage
+
+## 3.4 Gradient Broosting
+
+```{r}
+
+set.seed(1234)
+
+# Entrenamiento del modelo con los 8 predictores
+
+hiperparametros <-  expand.grid(interaction.depth = c(6, 7, 8, 10), 
+                        n.trees = (1:5)*50, 
+                        shrinkage = c(0.01, 0.05, 0.1),
+                        n.minobsinnode = c(1, 2, 3)
+                        )
+
+modelo.gbm <- train(LOG.LC50 ~ . , 
+                 data = datos.train, 
+                 method = "gbm", 
+                 trControl = fitControl,
+                 verbose = FALSE,
+                 metric = "Rsquared",
+                 preProc = c("scale", "center"),
+                 tuneGrid = hiperparametros)
+
+kable(round(modelo.gbm$results, 3))
+
+ggplot(modelo.gbm)
+
+modelo.gbm$bestTune
+
+
+# Entrenamiento del modelo con los 4 predictores
+
+hiperparametros <-  expand.grid(interaction.depth = c(8, 9, 10), 
+                        n.trees = (20:22)*50, 
+                        shrinkage = c(0.005, 0.01, 0.05),
+                        n.minobsinnode = c(1)
+                        )
+
+modelo.gbm.p <- train(LOG.LC50 ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "gbm", 
+                    trControl = fitControl,
+                    verbose = FALSE,
+                    preProc = c("scale", "center"),
+                    metric = "Rsquared",
+                    tuneGrid = hiperparametros
+                    )
+
+kable(round(modelo.gbm.p$results, 3))
+
+ggplot(modelo.gbm.p)
+
+modelo.gbm.p$bestTune
+
+```
+
+Predicciones
+
+```{r}
+
+y.modelo.gbm <- predict(modelo.gbm, datos.test)
+
+# validaciones
+
+plot(x = datos.test$LOG.LC50, y = y.modelo.gbm, 
+     xlab ='Valor observado', ylab = 'Predicción')
+abline(a = 0, b = 1, lty ='dashed')
+
+cor(datos.test$LOG.LC50, y.modelo.gbm)
+postResample(datos.test$LOG.LC50, y.modelo.gbm)
+
+y.modelo.gbm.p <- predict(modelo.gbm.p, datos.test)
+
+# validaciones
+
+plot(x = datos.test$LOG.LC50, y = y.modelo.gbm.p, 
+     xlab ='Valor observado', ylab = 'Predicción')
+abline(a = 0, b = 1, lty ='dashed')
+
+cor(datos.test$LOG.LC50, y.modelo.gbm.p)
+postResample(datos.test$LOG.LC50, y.modelo.gbm.p)
+
+```
+
+El mejor modelo tiene una coeficiente de determinación de 0.526 y un RMSE de 1.18
+
+\newpage
+
+## 3.5 Random forest ranger
+
+
+```{r}
+
+set.seed(1234)
+
+# Entrenamiento del modelo con los 8 predictores
+
+hiperparametros <- data.frame(.mtry = c(1, 2, 3, 4),
+                       .splitrule = "extratrees",
+                       .min.node.size = 5
+                       )
+ 
+modelo.ranger <- train(LOG.LC50 ~., data = datos.train,
+                  method = "ranger", 
+                  trControl = fitControl,
+                  metric = "Rsquared",
+                  preProc = c("scale", "center"),
+                  tuneGrid = hiperparametros
+                  )
+
+kable(modelo.ranger$results)
+
+kable(modelo.ranger$bestTune)
+
+# Entrenamiento del modelo con los 4 predictores
+
+hiperparametros <- data.frame(.mtry = c(1, 2, 3, 4),
+                       .splitrule = "extratrees",
+                       .min.node.size = 5
+                       )
+
+modelo.ranger.p <- train(LOG.LC50 ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                  data = datos.train,
+                  method = "ranger", 
+                  trControl = fitControl,
+                  metric = "Rsquared",
+                  preProc = c("scale", "center"),
+                  tuneGrid = hiperparametros
+                  )
+
+kable(modelo.ranger.p$results)
+
+kable(modelo.ranger.p$bestTune)
+
+```
+
+*Predicciones*
+
+```{r}
+
+y.modelo.ranger <- predict(modelo.ranger, datos.test)
+y.modelo.ranger.p <- predict(modelo.ranger.p, datos.test)
+
+```
+
+```{r}
+
+save(modelo.ranger.p , file = 'LC50cv.rda')
+
+```
+
+
+*Gráfica*
+
+```{r}
+
+plot(x = datos.test$LOG.LC50, y = y.modelo.ranger, 
+     xlab ='Valor observado', ylab = 'Predicción')
+abline(a = 0, b = 1, lty ='dashed')
+
+cor(datos.test$LOG.LC50, y.modelo.ranger)
+postResample(datos.test$LOG.LC50, y.modelo.ranger)
+
+plot(x = datos.test$LOG.LC50, y = y.modelo.ranger.p, 
+     xlab ='Valor observado', ylab = 'Predicción')
+abline(a = 0, b = 1, lty ='dashed')
+
+cor(datos.test$LOG.LC50, y.modelo.ranger.p)
+postResample(datos.test$LOG.LC50, y.modelo.ranger.p)
+
+```
+
+\newpage
+
+# 4. Mejores modelos
+
+```{r}
+
+modelos <- resamples(list(
+              svmRadial = modelo.svm.r,
+              rf = modelo.rf,
+              cubic = modelo.c,
+              gbm = modelo.gbm,
+              ranger = modelo.ranger
+               ))
+
+modelos.p <- resamples(list(
+              svmRadial = modelo.svm.r.p,
+              rf = modelo.rf.p,
+              cubic = modelo.c.p,
+              gbm = modelo.gbm.p,
+              ranger = modelo.ranger.p
+               ))
+
+```
+
+\newpage
+
+## 4.1 Gráficas y estadísticas
+
+```{r}
+
+summary(modelos)
+
+bwplot(modelos)
+
+dotplot(modelos)
+
+densityplot(modelos, auto.key = list(columns = 3))
+
+splom(modelos, variables = "metrics")
+
+```
+
+\newpage
+
+```{r}
+
+summary(modelos.p)
+
+bwplot(modelos.p)
+
+dotplot(modelos.p)
+
+densityplot(modelos.p, auto.key = list(columns = 3))
+
+splom(modelos.p, variables = "metrics")
+
+```
+
+\newpage
+
+## 4.6 Comparación entre los dos modelos
+
+```{r}
+
+compare_models(modelo.svm.r, modelo.svm.r.p)
+compare_models(modelo.rf, modelo.rf.p)
+compare_models(modelo.c, modelo.c.p)
+compare_models(modelo.ranger, modelo.ranger.p)
+compare_models(modelo.gbm, modelo.gbm.p)
+
+compare_models(modelo.svm.r, modelo.rf)
+compare_models(modelo.svm.r, modelo.c)
+compare_models(modelo.svm.r, modelo.gbm)
+compare_models(modelo.svm.r, modelo.ranger)
+
+compare_models(modelo.rf, modelo.c)
+compare_models(modelo.rf, modelo.gbm)
+compare_models(modelo.rf, modelo.ranger)
+
+compare_models(modelo.gbm, modelo.c)
+compare_models(modelo.gbm, modelo.ranger)
+
+compare_models(modelo.c, modelo.ranger)
+
+compare_models(modelo.svm.r.p, modelo.rf.p)
+compare_models(modelo.svm.r.p, modelo.c.p)
+compare_models(modelo.svm.r.p, modelo.gbm.p)
+compare_models(modelo.svm.r.p, modelo.ranger.p)
+
+compare_models(modelo.rf.p, modelo.c.p)
+compare_models(modelo.rf.p, modelo.gbm.p)
+compare_models(modelo.rf.p, modelo.ranger.p)
+
+compare_models(modelo.gbm.p, modelo.c.p)
+compare_models(modelo.gbm.p, modelo.ranger.p)
+
+compare_models(modelo.c.p, modelo.ranger.p)
+
+```
+
+No existen diferencias estadísticamente significativas.
+
+\newpage
+# 5. Optimización de los modelos elegidos descartando extremos
+
+## 5.1 Máquina de Vectores de Soporte radial
+
+Análisis de predictores
+
+```{r}
+
+y <- predict(modelo.svm.r.p, qsar.aq.tox)
+residuos <-  y  - qsar.aq.tox$LOG.LC50
+n <- 1:length(qsar.aq.tox$LOG.LC50)
+residuos <-  data.frame(n, residuos)
+#kable(residuos)
+Ind <- residuos$n[abs(residuos$residuos) >= 1]
+Ind
+
+100*length(Ind)/length(qsar.aq.tox$LOG.LC50)
+
+set.seed(1234)
+
+qsar.aq.tox.se <- qsar.aq.tox[c(-Ind), ]
+
+index <- createDataPartition(qsar.aq.tox.se$LOG.LC50, 
+                             p = .80, 
+                             list = FALSE)
+
+datos.train.se <- qsar.aq.tox.se[index,] # crea train desde el índice 
+datos.test.se <- qsar.aq.tox.se[-index,] # crea test desde el índice
+
+fitControl.se <- trainControl(index = createFolds(y = datos.train.se$LOG.LC50,
+                           k = 5,
+                           list = TRUE,
+                           returnTrain = TRUE),
+                           method = "cv",
+                           number = 10,
+                           #selectionFunction = "tolerance"
+                           )
+
+```
+
+
+```{r}
+
+set.seed(1234)
+
+hiperparametros <- expand.grid(sigma = c(0.5, 1, 1.25, 1.5, 1.75, 2, 3, 3.5),
+                               C = c(0.5, 1, 1.25, 1.5, 1.75, 2))
+
+modelo.svm.r.p.se <- train(LOG.LC50 ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train.se, 
+                    method = "svmRadial", 
+                    trControl = fitControl.se,
+                    verbose = FALSE,
+                    preProc = c("scale", "center"),
+                    metric = "Rsquared",
+                    tuneGrid = hiperparametros
+                    )
+               
+kable(round(modelo.svm.r.p.se$results, 3))
+
+ggplot(modelo.svm.r.p.se)
+
+kable(modelo.svm.r.p.se$bestTune)
+
+```
+
+*Predicciones*
+
+```{r}
+
+y.modelo.svm.r.p.se <- predict(modelo.svm.r.p.se, datos.test.se)
+
+```
+
+*Gráfica*
+
+```{r}
+
+plot(x = datos.test.se$LOG.LC50, y = y.modelo.svm.r.p.se, 
+     xlab ='Valor observado', ylab = 'Predicción')
+abline(a = 0, b = 1, lty ='dashed')
+
+cor(datos.test.se$LOG.LC50, y.modelo.svm.r.p.se)
+postResample(datos.test.se$LOG.LC50, y.modelo.svm.r.p.se)
+
+```
+
+
+```{r}
+
+save(modelo.svm.r.p.se , file = 'LC50svmrnexcv.rda')
+
+```
+
+
+\newpage
+
+## 5.2 Árbol de modelo Cubist
+
+Análisis de predictores
+
+```{r}
+
+y <- predict(modelo.c.p , qsar.aq.tox)
+residuos <-  y  - qsar.aq.tox$LOG.LC50
+n <- 1:length(qsar.aq.tox$LOG.LC50)
+residuos <-  data.frame(n, residuos)
+#kable(residuos)
+Ind <- residuos$n[abs(residuos$residuos) >= 1]
+Ind
+
+100*length(Ind)/length(qsar.aq.tox$LOG.LC50)
+
+set.seed(1234)
+
+qsar.aq.tox.se <- qsar.aq.tox[c(-Ind), ]
+
+index <- createDataPartition(qsar.aq.tox.se$LOG.LC50, 
+                             p = .80, 
+                             list = FALSE)
+
+datos.train.se <- qsar.aq.tox.se[index,] # crea train desde el índice 
+datos.test.se <- qsar.aq.tox.se[-index,] # crea test desde el índice
+
+fitControl.se <- trainControl(index = createFolds(y = datos.train.se$LOG.LC50,
+                           k = 5,
+                           list = TRUE,
+                           returnTrain = TRUE),
+                           method = "cv",
+                           number = 10,
+                           #selectionFunction = "tolerance"
+                           )
+
+```
+
+
+```{r}
+
+set.seed(1234)
+
+
+hiperparametros <-  expand.grid(committees = c(25, 30, 35, 40, 42, 44),
+                                neighbors = c(0, 1, 2, 3, 4, 5, 6)
+                                )
+
+modelo.c.p.se <- train(LOG.LC50 ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train.se, 
+                    method = "cubist", 
+                    trControl = fitControl.se,
+                    verbose = FALSE,
+                    preProc = c("scale", "center"),
+                    metric = "Rsquared",
+                    tuneGrid = hiperparametros
+                    )
+
+kable(round(modelo.c.p.se$results, 3))
+
+ggplot(modelo.c.p.se)
+
+kable(modelo.c.p.se$bestTune)
+
+varImp(modelo.c.p.se)
+
+```
+
+*Predicciones*
+
+```{r}
+
+y.modelo.c.p.se <- predict(modelo.c.p.se, datos.test.se)
+
+```
+
+*Gráfica*
+
+```{r}
+
+plot(x = datos.test.se$LOG.LC50, y = y.modelo.c.p.se, 
+     xlab ='Valor observado', ylab = 'Predicción')
+abline(a = 0, b = 1, lty ='dashed')
+
+cor(datos.test.se$LOG.LC50, y.modelo.c.p.se)
+postResample(datos.test.se$LOG.LC50, y.modelo.c.p.se)
+
+```
+
+
+```{r}
+
+save(modelo.c.p.se , file = 'LC50cnexcv.rda')
+
+```
+
+
+\newpage
+
+## 5.3 Random forest
+
+Análisis de predictores
+
+```{r}
+
+y <- predict(modelo.rf.p , qsar.aq.tox)
+residuos <-  y  - qsar.aq.tox$LOG.LC50
+n <- 1:length(qsar.aq.tox$LOG.LC50)
+residuos <-  data.frame(n, residuos)
+#kable(residuos)
+Ind <- residuos$n[abs(residuos$residuos) >= 1]
+Ind
+
+100*length(Ind)/length(qsar.aq.tox$LOG.LC50)
+
+set.seed(1234)
+
+qsar.aq.tox.se <- qsar.aq.tox[c(-Ind), ]
+
+index <- createDataPartition(qsar.aq.tox.se$LOG.LC50, 
+                             p = .80, 
+                             list = FALSE)
+
+datos.train.se <- qsar.aq.tox.se[index,] # crea train desde el índice 
+datos.test.se <- qsar.aq.tox.se[-index,] # crea test desde el índice
+
+fitControl.se <- trainControl(index = createFolds(y = datos.train.se$LOG.LC50,
+                           k = 5,
+                           list = TRUE,
+                           returnTrain = TRUE),
+                           method = "cv",
+                           number = 10,
+                           #selectionFunction = "tolerance"
+                           )
+
+```
+
+
+*Entrenamiento*
+
+```{r}
+
+set.seed(1234)
+
+
+hiperparametros <-  data.frame(mtry = seq(1, 2, by = 0.05))
+
+modelo.rf.p.se <- train(LOG.LC50 ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train.se, 
+                    method = "rf", 
+                    trControl = fitControl.se,
+                    verbose = FALSE,
+                    preProc = c("scale", "center"),
+                    metric = "Rsquared",
+                    tuneGrid = hiperparametros,
+                    keep.forest = TRUE
+                    )
+
+kable(round(modelo.rf.p.se$results, 3))
+
+ggplot(modelo.rf.p.se)
+
+kable(modelo.rf.p.se$bestTune)
+
+varImp(modelo.rf.p.se)
+
+```
+
+*Predicciones*
+
+```{r}
+
+y.modelo.rf.p.se <- predict(modelo.rf.p.se, datos.test.se)
+
+```
+
+*Gráfica*
+
+```{r}
+
+plot(x = datos.test.se$LOG.LC50, y = y.modelo.rf.p.se, 
+     xlab ='Valor observado', ylab = 'Predicción')
+abline(a = 0, b = 1, lty ='dashed')
+
+cor(datos.test.se$LOG.LC50, y.modelo.rf.p.se)
+postResample(datos.test.se$LOG.LC50, y.modelo.rf.p.se)
+
+```
+
+\newpage
+
+## 5.4 Gradient Broosting
+
+Análisis de predictores
+
+```{r}
+
+y <- predict(modelo.gbm.p , qsar.aq.tox)
+residuos <-  y  - qsar.aq.tox$LOG.LC50
+n <- 1:length(qsar.aq.tox$LOG.LC50)
+residuos <-  data.frame(n, residuos)
+#kable(residuos)
+Ind <- residuos$n[abs(residuos$residuos) >= 1]
+Ind
+
+100*length(Ind)/length(qsar.aq.tox$LOG.LC50)
+
+set.seed(1234)
+
+qsar.aq.tox.se <- qsar.aq.tox[c(-Ind), ]
+
+index <- createDataPartition(qsar.aq.tox.se$LOG.LC50, 
+                             p = .80, 
+                             list = FALSE)
+
+datos.train.se <- qsar.aq.tox.se[index,] # crea train desde el índice 
+datos.test.se <- qsar.aq.tox.se[-index,] # crea test desde el índice
+
+fitControl.se <- trainControl(index = createFolds(y = datos.train.se$LOG.LC50,
+                           k = 5,
+                           list = TRUE,
+                           returnTrain = TRUE),
+                           method = "cv",
+                           number = 10,
+                           #selectionFunction = "tolerance"
+                           )
+
+```
+
+
+
+```{r}
+
+set.seed(1234)
+
+
+hiperparametros <-  expand.grid(interaction.depth = c(7, 8, 9, 10), 
+                        n.trees = (20:22)*50, 
+                        shrinkage = c(0.005, 0.01, 0.05),
+                        n.minobsinnode = c(1, 2)
+                        )
+
+modelo.gbm.p.se <- train(LOG.LC50 ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train.se, 
+                    method = "gbm", 
+                    trControl = fitControl.se,
+                    verbose = FALSE,
+                    preProc = c("scale", "center"),
+                    metric = "Rsquared",
+                    tuneGrid = hiperparametros
+                    )
+
+kable(round(modelo.gbm.p.se$results, 3))
+
+ggplot(modelo.gbm.p.se)
+
+modelo.gbm.p.se$bestTune
+
+```
+
+Predicciones
+
+```{r}
+
+y.modelo.gbm.p.se <- predict(modelo.gbm.p.se, datos.test.se)
+
+
+plot(x = datos.test.se$LOG.LC50, y = y.modelo.gbm.p.se, 
+     xlab ='Valor observado', ylab = 'Predicción')
+abline(a = 0, b = 1, lty ='dashed')
+
+cor(datos.test.se$LOG.LC50, y.modelo.gbm.p.se)
+postResample(datos.test.se$LOG.LC50, y.modelo.gbm.p.se)
+
+```
+
+El mejor modelo tiene una coeficiente de determinación de 0.526 y un RMSE de 1.18
+
+\newpage
+
+## 5.5 Random forest ranger
+
+Análisis de predictores
+
+```{r}
+
+y <- predict(modelo.ranger.p , qsar.aq.tox)
+residuos <-  y  - qsar.aq.tox$LOG.LC50
+n <- 1:length(qsar.aq.tox$LOG.LC50)
+residuos <-  data.frame(n, residuos)
+#kable(residuos)
+Ind <- residuos$n[abs(residuos$residuos) >= 1]
+Ind
+
+100*length(Ind)/length(qsar.aq.tox$LOG.LC50)
+
+set.seed(1234)
+
+qsar.aq.tox.se <- qsar.aq.tox[c(-Ind), ]
+
+index <- createDataPartition(qsar.aq.tox.se$LOG.LC50, 
+                             p = .80, 
+                             list = FALSE)
+
+datos.train.se <- qsar.aq.tox.se[index,] # crea train desde el índice 
+datos.test.se <- qsar.aq.tox.se[-index,] # crea test desde el índice
+
+fitControl.se <- trainControl(index = createFolds(y = datos.train.se$LOG.LC50,
+                           k = 5,
+                           list = TRUE,
+                           returnTrain = TRUE),
+                           method = "cv",
+                           number = 10,
+                           #selectionFunction = "tolerance"
+                           )
+
+```
+
+
+```{r}
+
+set.seed(1234)
+
+hiperparametros <- data.frame(.mtry = c(1, 2, 3, 4),
+                       .splitrule = "extratrees",
+                       .min.node.size = 5
+                       )
+
+modelo.ranger.p.se <- train(LOG.LC50 ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                  data = datos.train.se,
+                  method = "ranger", 
+                  trControl = fitControl.se,
+                  metric = "Rsquared",
+                  preProc = c("scale", "center"),
+                  tuneGrid = hiperparametros
+                  )
+
+kable(modelo.ranger.p.se$results)
+
+kable(modelo.ranger.p.se$bestTune)
+
+```
+
+*Predicciones*
+
+```{r}
+
+y.modelo.ranger.p.se <- predict(modelo.ranger.p.se, datos.test.se)
+
+```
+
+```{r}
+
+save(modelo.ranger.p.se , file = 'LC50rnexcv.rda')
+
+```
+
+
+*Gráfica*
+
+```{r}
+
+plot(x = datos.test.se$LOG.LC50, y = y.modelo.ranger.p.se, 
+     xlab ='Valor observado', ylab = 'Predicción')
+abline(a = 0, b = 1, lty ='dashed')
+
+cor(datos.test.se$LOG.LC50, y.modelo.ranger.p.se)
+postResample(datos.test.se$LOG.LC50, y.modelo.ranger.p.se)
+
+```
+

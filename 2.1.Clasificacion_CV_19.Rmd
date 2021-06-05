@@ -1,0 +1,904 @@
+---
+title: "Clasificación CV 19 algoritmos - 4 y 8 predictores"
+author: "Verónica Pinos Vélez"
+date: "05/05/2021"
+output:
+  pdf_document:
+    latex_engine: xelatex
+    toc: yes
+    toc_depth: 2
+  word_document:
+    toc: yes
+    toc_depth: '2'
+  html_document:
+    toc: yes
+    toc_depth: 2
+    toc_float: yes
+subtitle: PEC2
+---
+```{r, echo=FALSE}
+htmltools::img(src = knitr::image_uri( "logo_uoc_petit.png"), 
+               alt = 'logo UOC', 
+               style = 'position:absolute; top:0; right:0; padding:10px;')
+htmltools::img(src = knitr::image_uri( "logo_ub_petit.png"), 
+               alt = 'logo UB', 
+               style = 'position:absolute; top:0; left:0; padding:10px;')
+```
+<style type="text/css">
+
+h1.title {
+  font-size: 18px;
+  color: DarkRed;
+  text-align: center;
+}
+h3.subtitle {
+  font-size: 18px;
+  color: DarkBlue;
+  text-align: center;
+}
+h4.author { /* Header 4 - and the author and data headers use this too  */
+    font-size: 18px;
+  font-family: "Times New Roman", Times, serif;
+  color: DarkBlue;
+  text-align: center;
+}
+h4.date { /* Header 4 - and the author and data headers use this too  */
+  font-size: 18px;
+  font-family: "Times New Roman", Times, serif;
+  color: DarkBlue;
+  text-align: center;
+}
+</style>
+
+
+```{r setup, include = FALSE}
+
+# knitr options
+knitr::opts_chunk$set(echo = TRUE, 
+                      message = FALSE, 
+                      warning = FALSE, 
+                      comment = NULL, 
+                      prompt = TRUE, 
+                      tidy = FALSE, 
+                      fig.width = 7, 
+                      fig.height = 7, 
+                      fig_caption = TRUE,
+                      cache = TRUE)
+
+```
+
+```{r libraries, include = FALSE}
+
+library(knitr)
+library("citr")
+library(readr)
+library(tidyverse)
+library(caret)
+library(ggpubr) 
+library(skimr) # summary gráfico
+library(nortest) # pruebas de normalidad
+library(GGally) # correlación
+library(psych) # correlación
+library(PerformanceAnalytics ) # correlaciones
+library(modelgrid) # entrenar simultáneamente varios modelos
+library(readxl)
+
+```
+
+\newpage
+
+# Base de datos
+
+```{r}
+
+qsar.aq.tox <- read_excel("qsar_aquatic_toxicity_cat.xlsx")
+
+qsar.aq.tox <- data.frame(qsar.aq.tox)
+
+str(qsar.aq.tox)
+
+qsar.aq.tox$Toxicidad <- factor(qsar.aq.tox$Toxicidad)
+
+str(qsar.aq.tox)
+
+ggplot(data = qsar.aq.tox, aes(x = Toxicidad, y = ..count.., fill = Toxicidad)) +
+  geom_bar() +
+  scale_fill_manual(values = c("darkblue", "darkred")) +
+  labs(title = "Toxicidad") +
+  theme_bw() +
+  theme(legend.position = "bottom")
+
+
+```
+
+\newpage
+
+```{r}
+
+
+p1 <- ggplot(data = qsar.aq.tox, aes(x = MLOGP, fill = Toxicidad)) +
+      geom_density(alpha = 0.5) +
+      scale_fill_manual(values = c("darkblue", "darkred")) +
+      geom_rug(aes(color = Toxicidad), alpha = 0.5) +
+      scale_color_manual(values = c("darkblue", "darkred")) +
+      theme_bw()
+p2 <- ggplot(data = qsar.aq.tox, aes(x = Toxicidad, y = MLOGP, color = Toxicidad)) +
+      geom_boxplot(outlier.shape = NA) +
+      geom_jitter(alpha = 0.3, width = 0.15) +
+      scale_color_manual(values = c("darkblue", "darkred")) +
+      theme_bw()
+
+final_plot <- ggarrange(p1, p2, legend = "top")
+final_plot <- annotate_figure(final_plot, top = text_grob("MLOGP", size = 15))
+final_plot
+
+```
+
+
+```{r}
+
+p1 <- ggplot(data = qsar.aq.tox, aes(x = TPSA.Tot, fill = Toxicidad)) +
+      geom_density(alpha = 0.5) +
+      scale_fill_manual(values = c("darkblue", "darkred")) +
+      geom_rug(aes(color = Toxicidad), alpha = 0.5) +
+      scale_color_manual(values = c("darkblue", "darkred")) +
+      theme_bw()
+p2 <- ggplot(data = qsar.aq.tox, aes(x = Toxicidad, y = TPSA.Tot, color = Toxicidad)) +
+      geom_boxplot(outlier.shape = NA) +
+      geom_jitter(alpha = 0.3, width = 0.15) +
+      scale_color_manual(values = c("darkblue", "darkred")) +
+      theme_bw()
+
+final_plot <- ggarrange(p1, p2, legend = "top")
+final_plot <- annotate_figure(final_plot, top = text_grob("TPSA.Tot", size = 15))
+final_plot
+
+```
+
+
+```{r}
+
+p1 <- ggplot(data = qsar.aq.tox, aes(x = H.050, fill = Toxicidad)) +
+      geom_density(alpha = 0.5) +
+      scale_fill_manual(values = c("darkblue", "darkred")) +
+      geom_rug(aes(color = Toxicidad), alpha = 0.5) +
+      scale_color_manual(values = c("darkblue", "darkred")) +
+      theme_bw()
+p2 <- ggplot(data = qsar.aq.tox, aes(x = Toxicidad, y = H.050, color = Toxicidad)) +
+      geom_boxplot(outlier.shape = NA) +
+      geom_jitter(alpha = 0.3, width = 0.15) +
+      scale_color_manual(values = c("darkblue", "darkred")) +
+      theme_bw()
+
+final_plot <- ggarrange(p1, p2, legend = "top")
+final_plot <- annotate_figure(final_plot, top = text_grob("H.050", size = 15))
+final_plot
+
+```
+
+
+```{r}
+
+p1 <- ggplot(data = qsar.aq.tox, aes(x = RDCHI, fill = Toxicidad)) +
+      geom_density(alpha = 0.5) +
+      scale_fill_manual(values = c("darkblue", "darkred")) +
+      geom_rug(aes(color = Toxicidad), alpha = 0.5) +
+      scale_color_manual(values = c("darkblue", "darkred")) +
+      theme_bw()
+p2 <- ggplot(data = qsar.aq.tox, aes(x = Toxicidad, y = RDCHI, color = Toxicidad)) +
+      geom_boxplot(outlier.shape = NA) +
+      geom_jitter(alpha = 0.3, width = 0.15) +
+      scale_color_manual(values = c("darkblue", "darkred")) +
+      theme_bw()
+
+final_plot <- ggarrange(p1, p2, legend = "top")
+final_plot <- annotate_figure(final_plot, top = text_grob("RDCHI", size = 15))
+final_plot
+
+```
+
+```{r}
+
+p1 <- ggplot(data = qsar.aq.tox, aes(x = SAacc, fill = Toxicidad)) +
+      geom_density(alpha = 0.5) +
+      scale_fill_manual(values = c("darkblue", "darkred")) +
+      geom_rug(aes(color = Toxicidad), alpha = 0.5) +
+      scale_color_manual(values = c("darkblue", "darkred")) +
+      theme_bw()
+p2 <- ggplot(data = qsar.aq.tox, aes(x = Toxicidad, y = SAacc, color = Toxicidad)) +
+      geom_boxplot(outlier.shape = NA) +
+      geom_jitter(alpha = 0.3, width = 0.15) +
+      scale_color_manual(values = c("darkblue", "darkred")) +
+      theme_bw()
+
+final_plot <- ggarrange(p1, p2, legend = "top")
+final_plot <- annotate_figure(final_plot, top = text_grob("SAacc", size = 15))
+final_plot
+
+```
+
+
+```{r}
+
+p1 <- ggplot(data = qsar.aq.tox, aes(x = GATS1p, fill = Toxicidad)) +
+      geom_density(alpha = 0.5) +
+      scale_fill_manual(values = c("darkblue", "darkred")) +
+      geom_rug(aes(color = Toxicidad), alpha = 0.5) +
+      scale_color_manual(values = c("darkblue", "darkred")) +
+      theme_bw()
+p2 <- ggplot(data = qsar.aq.tox, aes(x = Toxicidad, y = GATS1p, color = Toxicidad)) +
+      geom_boxplot(outlier.shape = NA) +
+      geom_jitter(alpha = 0.3, width = 0.15) +
+      scale_color_manual(values = c("darkblue", "darkred")) +
+      theme_bw()
+
+final_plot <- ggarrange(p1, p2, legend = "top")
+final_plot <- annotate_figure(final_plot, top = text_grob("GATS1p", size = 15))
+final_plot
+
+```
+
+
+```{r}
+
+p1 <- ggplot(data = qsar.aq.tox, aes(x = C.040, fill = Toxicidad)) +
+      geom_density(alpha = 0.5) +
+      scale_fill_manual(values = c("darkblue", "darkred")) +
+      geom_rug(aes(color = Toxicidad), alpha = 0.5) +
+      scale_color_manual(values = c("darkblue", "darkred")) +
+      theme_bw()
+p2 <- ggplot(data = qsar.aq.tox, aes(x = Toxicidad, y = C.040, color = Toxicidad)) +
+      geom_boxplot(outlier.shape = NA) +
+      geom_jitter(alpha = 0.3, width = 0.15) +
+      scale_color_manual(values = c("darkblue", "darkred")) +
+      theme_bw()
+
+final_plot <- ggarrange(p1, p2, legend = "top")
+final_plot <- annotate_figure(final_plot, top = text_grob("C.040", size = 15))
+final_plot
+
+```
+
+
+```{r}
+
+p1 <- ggplot(data = qsar.aq.tox, aes(x = nN, fill = Toxicidad)) +
+      geom_density(alpha = 0.5) +
+      scale_fill_manual(values = c("darkblue", "darkred")) +
+      geom_rug(aes(color = Toxicidad), alpha = 0.5) +
+      scale_color_manual(values = c("darkblue", "darkred")) +
+      theme_bw()
+p2 <- ggplot(data = qsar.aq.tox, aes(x = Toxicidad, y = nN, color = Toxicidad)) +
+      geom_boxplot(outlier.shape = NA) +
+      geom_jitter(alpha = 0.3, width = 0.15) +
+      scale_color_manual(values = c("darkblue", "darkred")) +
+      theme_bw()
+
+final_plot <- ggarrange(p1, p2, legend = "top")
+final_plot <- annotate_figure(final_plot, top = text_grob("nN", size = 15))
+final_plot
+
+```
+
+\newpage
+
+## Separación en entrenamiento y test
+
+```{r}
+
+# Separamos los datos 
+set.seed(1234) # Fijamos la semilla para obtener los mismos resultados
+index <- createDataPartition(qsar.aq.tox$Toxicidad, 
+                                  p = .80, list = FALSE, times = 1)
+
+datos.train <- qsar.aq.tox[index,] # crea train desde el índice 
+datos.test <- qsar.aq.tox[-index,] # crea test desde el índice
+
+```
+
+## Validación Cruzada
+
+```{r}
+
+cv.index <- createFolds(y = datos.train$Toxicidad,
+                        k = 5,
+                        list = TRUE,
+                        returnTrain = TRUE)
+
+
+fitControl <- trainControl(index = cv.index,
+                           method = "cv",
+                           number = 5)
+
+
+```
+
+\newpage
+
+## 2.1. Mínimos cuadrados generalizados con AIC
+
+```{r}
+
+set.seed(1234)
+modelo.12 <- train(Toxicidad ~., data = datos.train, 
+                 method = "glmStepAIC", 
+                 verbose = FALSE,
+                 preProc = c("scale", "center"),
+                 trControl = fitControl,
+                 trace = FALSE)
+modelo.12
+
+modelo.12.p <- train(Toxicidad ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                   data = datos.train, 
+                    method = "glmStepAIC", 
+                    verbose = FALSE,
+                    preProc = c("scale", "center"),
+                    trControl = fitControl,
+                   trace = FALSE)
+modelo.12.p
+
+```
+
+\newpage
+## 2.2. Mínimo cuadrados parciales/Partial Least Squares
+
+```{r}
+
+set.seed(1234)
+modelo.13 <- train(Toxicidad ~., data = datos.train, 
+                 method = "pls", 
+                 verbose = FALSE,
+                 trControl = fitControl,
+                 preProc = c("scale", "center"))
+
+modelo.13
+varImp(modelo.13)
+
+modelo.13.p <- train(Toxicidad ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "pls", 
+                    verbose = FALSE,
+                    trControl = fitControl,
+                    preProc = c("scale", "center")
+                    )
+
+modelo.13.p
+varImp(modelo.13.p)
+
+```
+
+\newpage
+## 2.3. Random Forest - ranger
+
+```{r}
+
+set.seed(1234)
+modelo.19 <- train(Toxicidad ~., data = datos.train, 
+                 method = "ranger", 
+                 verbose = FALSE,
+                 trControl = fitControl,
+                 preProc = c("scale", "center")
+                 )
+modelo.19
+
+modelo.19.p <- train(Toxicidad ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "ranger", 
+                    verbose = FALSE,
+                    trControl = fitControl,
+                    preProc = c("scale", "center")
+                    )
+modelo.19.p
+
+```
+
+
+\newpage
+## 2.4. Generalized Additive Model using Splines
+
+```{r}
+
+set.seed(1234)
+modelo.22 <- train(Toxicidad ~., data = datos.train, 
+                 method = "gam", 
+                 verbose = FALSE,
+                 trControl = fitControl,
+                 preProc = c("scale", "center"))
+
+modelo.22
+varImp(modelo.22)
+
+modelo.22.p <- train(Toxicidad ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "gam", 
+                    verbose = FALSE,
+                    trControl = fitControl,
+                    preProc = c("scale", "center")
+                    )
+
+modelo.22.p
+varImp(modelo.22.p)
+
+```
+
+
+\newpage
+## 2.5. Gradient Broosting
+
+```{r}
+
+set.seed(1234)
+modelo.10 <- train(Toxicidad ~., data = datos.train, 
+                 method = "gbm", 
+                 verbose = FALSE,
+                 trControl = fitControl,
+                 preProc = c("scale", "center"))
+
+modelo.10
+
+modelo.10.p <- train(Toxicidad ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "gbm", 
+                    verbose = FALSE,
+                    trControl = fitControl,
+                    preProc = c("scale", "center")
+                    )
+
+modelo.10.p
+
+
+```
+
+
+\newpage
+## 2.6. Bagged CART
+
+```{r}
+
+set.seed(1234)
+modelo.14 <- train(Toxicidad ~., data = datos.train, 
+                 method = "treebag", 
+                 verbose = FALSE,
+                 trControl = fitControl,
+                 preProc = c("scale", "center"))
+
+modelo.14
+varImp(modelo.14)
+
+modelo.14.p <- train(Toxicidad ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "treebag", 
+                    verbose = FALSE,
+                    trControl = fitControl,
+                    preProc = c("scale", "center")
+                    )
+
+modelo.14.p
+varImp(modelo.14.p)
+
+```
+
+\newpage
+## 2.7. Bagged MARS
+
+```{r}
+
+set.seed(1234)
+modelo.15 <- train(Toxicidad ~., data = datos.train, 
+                 method = "bagEarth", 
+                 trControl = fitControl,
+                 preProc = c("scale", "center"))
+
+modelo.15
+
+modelo.15.p <- train(Toxicidad ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "bagEarth", 
+                    trControl = fitControl,
+                    preProc = c("scale", "center")
+                    )
+
+modelo.15.p
+
+```
+
+\newpage
+## 2.8. Bagged MARS using gCV Pruning
+
+```{r}
+
+set.seed(1234)
+modelo.16 <- train(Toxicidad ~., data = datos.train, 
+                 method = "bagEarthGCV", 
+                 trControl = fitControl,
+                 preProc = c("scale", "center"))
+
+modelo.16
+
+modelo.16.p <- train(Toxicidad ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "bagEarthGCV", 
+                    trControl = fitControl,
+                    preProc = c("scale", "center")
+                    )
+
+modelo.16.p
+
+```
+
+\newpage
+## 2.9. Bayesian Generalized Linear Model
+
+```{r}
+
+set.seed(1234)
+modelo.17 <- train(Toxicidad ~., data = datos.train, 
+                 method = "bayesglm", 
+                 trControl = fitControl,
+                 preProc = c("scale", "center"))
+
+modelo.17
+
+modelo.17.p <- train(Toxicidad ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "bayesglm", 
+                    trControl = fitControl,
+                    preProc = c("scale", "center")
+                    )
+
+modelo.17.p
+
+```
+
+\newpage
+## 2.10. Redes neuronales
+
+```{r}
+
+set.seed(1234)
+modelo.4 <- train(Toxicidad ~., data = datos.train, 
+                 method = "nnet", 
+                 verbose = FALSE,
+                 preProc = c("scale", "center"),
+                 trControl = fitControl,
+                 trace = FALSE)
+
+modelo.4
+varImp(modelo.4)
+
+modelo.4.p <- train(Toxicidad ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "nnet", 
+                    verbose = FALSE,
+                    preProc = c("scale", "center"),
+                    trControl = fitControl,
+                    trace = FALSE
+                    )
+
+modelo.4.p
+varImp(modelo.4.p)
+
+```
+
+\newpage
+## 2.11 Máquina de Vectores de Soporte - lineal
+
+```{r}
+
+set.seed(1234)
+modelo.5 <- train(Toxicidad ~., data = datos.train, 
+                 method = "svmLinear", 
+                 trControl = fitControl,
+                 preProc = c("scale", "center"))
+
+modelo.5
+
+modelo.5.p <- train(Toxicidad ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "svmLinear", 
+                    verbose = FALSE,
+                    trControl = fitControl,
+                    preProc = c("scale", "center")
+                    )
+
+modelo.5.p
+
+```
+
+\newpage
+## 2.12. Máquina de Vectores de Soporte - radial
+
+```{r}
+
+set.seed(1234)
+modelo.7 <- train(Toxicidad ~., data = datos.train, 
+                 method = "svmRadial", 
+                 verbose = FALSE,
+                 trControl = fitControl,
+                 preProc = c("scale", "center"))
+
+modelo.7
+
+modelo.7.p <- train(Toxicidad ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "svmRadial", 
+                    verbose = FALSE,
+                    trControl = fitControl,
+                    preProc = c("scale", "center")
+                    )
+
+modelo.7.p
+
+```
+
+\newpage
+## 2.13. Support Vector Machines with Polynomial Kernel
+
+```{r}
+
+set.seed(123)
+modelo.23 <- train(Toxicidad ~., data = datos.train, 
+                 method = "svmPoly", 
+                 verbose = FALSE,
+                 trControl = fitControl,
+                 preProc = c("scale", "center"))
+
+modelo.23
+
+modelo.23.p <- train(Toxicidad ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "svmPoly", 
+                    verbose = FALSE,
+                    trControl = fitControl,
+                    preProc = c("scale", "center")
+                    )
+
+modelo.23.p
+
+```
+
+
+\newpage
+
+## 2.14. svmLinear3
+
+```{r}
+
+set.seed(123)
+modelo.30 <- train(Toxicidad ~., data = datos.train, 
+                 method = "svmLinear3", 
+                 preProc = c("scale", "center"),
+                 trControl = fitControl,
+                 verbose = FALSE)
+
+modelo.30
+
+modelo.30.p <- train(Toxicidad ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "svmLinear3",
+                    preProc = c("scale", "center"),
+                    trControl = fitControl,
+                    verbose = FALSE
+                    )
+
+modelo.30.p
+
+```
+
+\newpage
+## 2.15. Arbol de regresión
+
+```{r}
+
+set.seed(123)
+modelo.3 <- train(Toxicidad ~., data = datos.train, 
+                 method = "rpart2", 
+                 trControl = fitControl,
+                 preProc = c("scale", "center"))
+
+modelo.3
+
+modelo.3.p <- train(Toxicidad ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "rpart2", 
+                    trControl = fitControl,
+                    preProc = c("scale", "center")
+                    )
+
+modelo.3.p
+
+```
+
+
+
+\newpage
+## 2.16. Random forest
+
+```{r}
+
+set.seed(123)
+modelo.11 <- train(Toxicidad ~., data = datos.train, 
+                 method = "rf", 
+                 verbose = FALSE,
+                 trControl = fitControl,
+                 preProc = c("scale", "center"))
+
+modelo.11
+
+modelo.11.p <- train(Toxicidad ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "rf", 
+                    verbose = FALSE,
+                    trControl = fitControl,
+                    preProc = c("scale", "center")
+                    )
+
+modelo.11.p
+
+```
+
+
+\newpage
+## 2.17. Boosted Tree
+
+```{r}
+
+set.seed(123)
+modelo.18 <- train(Toxicidad ~., data = datos.train, 
+                 method = "blackboost", 
+                 trControl = fitControl,
+                 preProc = c("scale", "center"))
+
+modelo.18
+
+modelo.18.p <- train(Toxicidad ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "blackboost", 
+                    trControl = fitControl,
+                    preProc = c("scale", "center")
+                    )
+
+modelo.18.p
+
+```
+
+
+\newpage
+## 2.18. elastic net regression
+
+```{r}
+
+set.seed(123)
+modelo.26 <- train(Toxicidad ~., data = datos.train, 
+                 method = "glmnet", 
+                 trControl = fitControl,
+                 preProc = c("scale", "center"))
+
+modelo.26
+
+modelo.26.p <- train(Toxicidad ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "glmnet", 
+                    trControl = fitControl,
+                    preProc = c("scale", "center")
+                    )
+
+modelo.26.p
+
+```
+
+\newpage
+## 2.19. Tree Models from Genetic Algorithms
+
+```{r}
+
+set.seed(123)
+modelo.27 <- train(Toxicidad ~., data = datos.train, 
+                 method = "evtree", 
+                 trControl = fitControl,
+                 preProc = c("scale", "center"))
+
+modelo.27
+
+modelo.27.p <- train(Toxicidad ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "evtree", 
+                    trControl = fitControl,
+                    preProc = c("scale", "center")
+                    )
+
+modelo.27.p
+
+```
+
+
+\newpage
+
+# 3. Comparaciones 
+
+## 3.1 modelos con 8 predictores
+
+```{r }
+
+modelos <- resamples(list(
+                
+                glmStepAIC = modelo.12,
+                pls = modelo.13,
+                ranger  = modelo.19,
+                gam = modelo.22,
+                gbm = modelo.10,
+                treebag = modelo.14,
+                bagEarth = modelo.15,
+                agEarthGCV = modelo.16,
+                bayesglm = modelo.17,
+                nnet = modelo.4,
+                svmLinear = modelo.5,
+                svmRadial = modelo.7,
+                svmPoly = modelo.23,
+                rpart2 = modelo.3,
+                rf = modelo.11,
+                blackboost = modelo.18,
+                glmnet = modelo.26,
+                evtree = modelo.27,
+                svmLinear3 = modelo.30
+                ))
+
+```
+
+\newpage
+
+```{r}
+
+summary(modelos)
+
+bwplot(modelos)
+
+dotplot(modelos)
+
+```
+
+\newpage
+
+## 3.2 modelos con 4 predictores
+
+```{r }
+
+modelos.p <- resamples(list(
+                glmStepAIC = modelo.12.p,
+                pls = modelo.13.p,
+                ranger  = modelo.19.p,
+                gam = modelo.22.p,
+                gbm = modelo.10.p,
+                treebag = modelo.14.p,
+                bagEarth = modelo.15.p,
+                agEarthGCV = modelo.16.p,
+                bayesglm = modelo.17.p,
+                nnet = modelo.4.p,
+                svmLinear = modelo.5.p,
+                svmRadial = modelo.7.p,
+                svmPoly = modelo.23.p,
+                rpart2 = modelo.3.p,
+                rf = modelo.11.p,
+                blackboost = modelo.18.p,
+                glmnet = modelo.26.p,
+                evtree = modelo.27.p,
+                svmLinear3 = modelo.30.p
+                ))
+
+
+
+```
+
+\newpage
+
+```{r}
+
+summary(modelos.p)
+
+bwplot(modelos.p)
+
+dotplot(modelos.p)
+
+```
+
+

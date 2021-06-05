@@ -1,0 +1,1182 @@
+---
+title: "Regresión CV 26 algoritmos con 4 y 8 predictores"
+author: "Verónica Pinos Vélez"
+date: "19/04/2021"
+output:
+  pdf_document:
+    latex_engine: xelatex
+    toc: yes
+    toc_depth: 2
+  word_document:
+    toc: yes
+    toc_depth: '2'
+  html_document:
+    toc: yes
+    toc_depth: 2
+    toc_float: yes
+subtitle: PEC2
+---
+```{r, echo=FALSE}
+htmltools::img(src = knitr::image_uri( "logo_uoc_petit.png"), 
+               alt = 'logo UOC', 
+               style = 'position:absolute; top:0; right:0; padding:10px;')
+htmltools::img(src = knitr::image_uri( "logo_ub_petit.png"), 
+               alt = 'logo UB', 
+               style = 'position:absolute; top:0; left:0; padding:10px;')
+```
+<style type="text/css">
+
+h1.title {
+  font-size: 18px;
+  color: DarkRed;
+  text-align: center;
+}
+h3.subtitle {
+  font-size: 18px;
+  color: DarkBlue;
+  text-align: center;
+}
+h4.author { /* Header 4 - and the author and data headers use this too  */
+    font-size: 18px;
+  font-family: "Times New Roman", Times, serif;
+  color: DarkBlue;
+  text-align: center;
+}
+h4.date { /* Header 4 - and the author and data headers use this too  */
+  font-size: 18px;
+  font-family: "Times New Roman", Times, serif;
+  color: DarkBlue;
+  text-align: center;
+}
+</style>
+
+
+```{r setup, include = FALSE}
+
+# knitr options
+knitr::opts_chunk$set(echo = TRUE, 
+                      message = FALSE, 
+                      warning = FALSE, 
+                      comment = NULL, 
+                      prompt = TRUE, 
+                      tidy = FALSE, 
+                      fig.width = 7, 
+                      fig.height = 7, 
+                      fig_caption = TRUE,
+                      cache = TRUE)
+
+```
+
+```{r libraries, include = FALSE}
+
+library(knitr)
+library("citr")
+library(readr)
+library(tidyverse)
+library(caret)
+library(ggpubr) 
+library(skimr) # summary gráfico
+library(nortest) # pruebas de normalidad
+library(GGally) # correlación
+library(psych) # correlación
+library(PerformanceAnalytics ) # correlaciones
+library(modelgrid) # entrenar simultáneamente varios modelos
+
+```
+
+\newpage
+
+# 0. Base de datos
+
+```{r}
+
+qsar.aq.tox <- read_delim("qsar_aquatic_toxicity.csv", 
+                          ";", escape_double = FALSE, 
+                          trim_ws = TRUE)
+
+#qsar.aq.tox$LOG.LC50 <- round(qsar.aq.tox$LOG.LC50 , 1)
+
+# Datos
+
+kable(head(round(qsar.aq.tox, 2), 10))
+
+```
+
+\newpage
+
+# 1 Exploración de los datos
+
+## 1.1 Estadística descriptiva
+
+```{r}
+
+# Datos sin escalar
+kable((summary(qsar.aq.tox)))
+
+# Datos escalados
+qsar.aq.tox.esc <-  data.frame(scale(qsar.aq.tox))
+kable((summary(qsar.aq.tox.esc)))
+
+```
+
+## 1.2 Valores ausentes
+
+```{r}
+
+any(!complete.cases(qsar.aq.tox))
+
+```
+
+No existen valores ausentes
+
+\newpage
+
+## 1.3 resumen
+
+```{r}
+
+skim_to_wide(qsar.aq.tox)
+
+```
+
+\newpage
+
+## 1.4 Distribución de las variables
+
+```{r}
+
+
+p1 <- ggplot(data = qsar.aq.tox, aes(x = TPSA.Tot)) +
+      geom_density(fill = "steelblue", alpha = 0.8) +
+      geom_rug(alpha = 0.1) +
+      scale_x_continuous(labels = scales::comma) +
+      labs(title = "TPSA.Tot") +
+      theme_bw() 
+
+p2 <- ggplot(data = qsar.aq.tox, aes(x = SAacc)) +
+      geom_density(fill = "steelblue", alpha = 0.8) +
+      geom_rug(alpha = 0.1) +
+      scale_x_continuous(labels = scales::comma) +
+      labs(title = "SAacc") +
+      theme_bw() 
+
+p3 <- ggplot(data = qsar.aq.tox, aes(x = H.050)) +
+      geom_density(fill = "steelblue", alpha = 0.8) +
+      geom_rug(alpha = 0.1) +
+      scale_x_continuous(labels = scales::comma) +
+      labs(title = "H.050") +
+      theme_bw() 
+
+p4 <- ggplot(data = qsar.aq.tox, aes(x = MLOGP)) +
+      geom_density(fill = "steelblue", alpha = 0.8) +
+      geom_rug(alpha = 0.1) +
+      scale_x_continuous(labels = scales::comma) +
+      labs(title = "MLOGP") +
+      theme_bw() 
+
+p5 <- ggplot(data = qsar.aq.tox, aes(x = RDCHI)) +
+      geom_density(fill = "steelblue", alpha = 0.8) +
+      geom_rug(alpha = 0.1) +
+      scale_x_continuous(labels = scales::comma) +
+      labs(title = "RDCHI") +
+      theme_bw()
+
+p6 <- ggplot(data = qsar.aq.tox, aes(x = GATS1p)) +
+      geom_density(fill = "steelblue", alpha = 0.8) +
+      geom_rug(alpha = 0.1) +
+      scale_x_continuous(labels = scales::comma) +
+      labs(title = "GATS1p") +
+      theme_bw() 
+
+p7 <- ggplot(data = qsar.aq.tox, aes(x = nN)) +
+      geom_density(fill = "steelblue", alpha = 0.8) +
+      geom_rug(alpha = 0.1) +
+      scale_x_continuous(labels = scales::comma) +
+      labs(title = "nM") +
+      theme_bw() 
+
+p8 <- ggplot(data = qsar.aq.tox, aes(x = C.040)) +
+      geom_density(fill = "steelblue", alpha = 0.8) +
+      geom_rug(alpha = 0.1) +
+      scale_x_continuous(labels = scales::comma) +
+      labs(title = "C.040") +
+      theme_bw() 
+
+p9 <- ggplot(data = qsar.aq.tox, aes(x = LOG.LC50)) +
+      geom_density(fill = "red", alpha = 0.8) +
+      geom_rug(alpha = 0.1) +
+      scale_x_continuous(labels = scales::comma) +
+      labs(title = "LOG.LC50") +
+      theme_bw() 
+
+ggarrange(p1, p2, p3, p4, p5, p6, p7, p8, p9, ncol = 3, 
+          align = "v")
+
+```
+ 
+
+\newpage
+
+## 1.5 pruebas de normalidad
+
+
+```{r}
+
+lillie.test(qsar.aq.tox$TPSA.Tot)
+lillie.test(qsar.aq.tox$SAacc)
+lillie.test(qsar.aq.tox$H.050)
+lillie.test(qsar.aq.tox$MLOGP)
+lillie.test(qsar.aq.tox$RDCHI)
+lillie.test(qsar.aq.tox$GATS1p)
+lillie.test(qsar.aq.tox$nN)
+lillie.test(qsar.aq.tox$C.040)
+lillie.test(qsar.aq.tox$LOG.LC50)
+
+```
+
+salvo MLOG, ninguna presenta una distribución normal. Esto podría suponer un problema para los modelos de regresión lineal.
+
+**Todas las variables son cuantitativas pero no todas son continuas y en ciertos casos su valor es cero, por ejemplo, H-050, nN y C.040 pues representan el número de hidrógenos, nitrogenos y carbono, respectivamente; entonces a veces su valor es cero.**
+
+\newpage
+
+## 1.6 Correlación variables
+
+```{r}
+
+# Todas las variables
+ggscatmat(data = qsar.aq.tox, alpha = 0.1)
+pairs.panels(qsar.aq.tox, pch = 20)
+chart.Correlation(qsar.aq.tox, histogram = T, pch = 20)
+
+```
+
+Vemos correlaciones importantes entre H.050 y SAacc; y entre nN con SAacc y TPSA.Tot
+
+\newpage
+
+# 2. Modelos
+
+## Separación en entrenamiento y test
+
+```{r}
+
+# Separamos los datos 
+set.seed(1234) # Fijamos la semilla para obtener los mismos resultados
+index <- createDataPartition(qsar.aq.tox$LOG.LC50, 
+                             p = .80, 
+                             list = FALSE)
+
+datos.train <- qsar.aq.tox[index,] # crea train desde el índice 
+datos.test <- qsar.aq.tox[-index,] # crea test desde el índice
+
+```
+
+\newpage
+Comprobamos la partición de entrenamiento - train
+
+```{r}
+# Comprobamos
+
+skim_to_wide(datos.train) 
+
+ggscatmat(datos.train)
+
+```
+
+\newpage
+Comprobamos la partición de prueba o test
+
+```{r}
+# Comprobamos
+
+skim_to_wide(datos.test)
+
+ggscatmat(datos.test)
+
+```
+
+\newpage
+
+## Validación Cruzada
+
+```{r}
+
+# Cambio k = 5
+
+cv.index <- createFolds(y = datos.train$LOG.LC50,
+                        k = 5,
+                        list = TRUE,
+                        returnTrain = TRUE)
+
+fitControl <- trainControl(index = cv.index,
+                           method = "cv",
+                           number = 5,
+                           #selectionFunction = "tolerance"
+                           )
+
+
+```
+
+
+\newpage
+## 2.1. Mínimos cuadrados generalizados con AIC
+
+```{r}
+
+set.seed(1234)
+modelo.12 <- train(LOG.LC50 ~., data = datos.train, 
+                 method = "glmStepAIC", 
+                 trControl = fitControl,
+                 verbose = FALSE,
+                 preProc = c("scale", "center"),
+                 metric = "Rsquared",
+                 trace = FALSE)
+modelo.12
+
+modelo.12.p <- train(LOG.LC50 ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "glmStepAIC", 
+                    trControl = fitControl,
+                    verbose = FALSE,
+                    preProc = c("scale", "center"),
+                    metric = "Rsquared",
+                    trace = FALSE)
+modelo.12.p
+
+```
+
+\newpage
+## 2.2. Mínimo cuadrados parciales/Partial Least Squares
+
+```{r}
+
+set.seed(1234)
+modelo.13 <- train(LOG.LC50 ~., data = datos.train, 
+                 method = "pls", 
+                 trControl = fitControl,
+                 verbose = FALSE,
+                 preProc = c("scale", "center"),
+                 metric = "Rsquared")
+
+modelo.13
+varImp(modelo.13)
+
+modelo.13.p <- train(LOG.LC50 ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "pls", 
+                    trControl = fitControl,
+                    verbose = FALSE,
+                    preProc = c("scale", "center"),
+                    metric = "Rsquared"
+                    )
+
+modelo.13.p
+varImp(modelo.13.p)
+
+```
+
+\newpage
+## 2.3. Random Forest - ranger
+
+```{r}
+
+set.seed(1234)
+modelo.19 <- train(LOG.LC50 ~., data = datos.train, 
+                 method = "ranger", 
+                 trControl = fitControl,
+                 verbose = FALSE,
+                 preProc = c("scale", "center"),
+                 metric = "Rsquared")
+modelo.19
+
+modelo.19.p <- train(LOG.LC50 ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "ranger", 
+                    trControl = fitControl,
+                    verbose = FALSE,
+                    preProc = c("scale", "center"),
+                    metric = "Rsquared"
+                    )
+modelo.19.p
+
+```
+
+\newpage
+## 2.4. Cubist
+
+```{r}
+
+set.seed(1234)
+modelo.20 <- train(LOG.LC50 ~., data = datos.train, 
+                 method = "cubist", 
+                 trControl = fitControl,
+                 verbose = FALSE,
+                 preProc = c("scale", "center"),
+                 metric = "Rsquared")
+
+modelo.20
+varImp(modelo.20)
+
+modelo.20.p <- train(LOG.LC50 ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "cubist", 
+                    trControl = fitControl,
+                    verbose = FALSE,
+                    preProc = c("scale", "center"),
+                    metric = "Rsquared"
+                    )
+
+modelo.20.p
+varImp(modelo.20.p)
+
+```
+
+\newpage
+## 2.5. Gaussian Process
+
+```{r}
+
+set.seed(1234)
+modelo.21 <- train(LOG.LC50 ~., data = datos.train, 
+                 method = "gaussprLinear", 
+                 trControl = fitControl,
+                 verbose = FALSE,
+                 preProc = c("scale", "center"),
+                 metric = "Rsquared")
+
+modelo.21
+
+modelo.21.p <- train(LOG.LC50 ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "gaussprLinear", 
+                    trControl = fitControl,
+                    verbose = FALSE,
+                    preProc = c("scale", "center"),
+                    metric = "Rsquared"
+                    )
+
+modelo.21.p
+
+```
+
+\newpage
+## 2.6. Generalized Additive Model using Splines
+
+```{r}
+
+set.seed(1234)
+modelo.22 <- train(LOG.LC50 ~., data = datos.train, 
+                 method = "gam", 
+                 trControl = fitControl,
+                 verbose = FALSE,
+                 preProc = c("scale", "center"),
+                 metric = "Rsquared")
+
+modelo.22
+varImp(modelo.22)
+
+modelo.22.p <- train(LOG.LC50 ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "gam", 
+                    trControl = fitControl,
+                    verbose = FALSE,
+                    preProc = c("scale", "center"),
+                    metric = "Rsquared"
+                    )
+
+modelo.22.p
+varImp(modelo.22.p)
+
+```
+
+\newpage
+## 2.7. The lasso
+
+```{r}
+
+set.seed(1234)
+modelo.6 <- train(LOG.LC50 ~., data = datos.train, 
+                 method = "lasso", 
+                 trControl = fitControl,
+                 preProc = c("scale", "center"),
+                 metric = "Rsquared")
+
+modelo.6
+
+modelo.6.p <- train(LOG.LC50 ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "lasso", 
+                    trControl = fitControl,
+                    preProc = c("scale", "center"),
+                    metric = "Rsquared"
+                    )
+
+modelo.6.p
+
+```
+
+\newpage
+## 2.8. Ridge
+
+```{r}
+
+set.seed(123)
+modelo.28 <- train(LOG.LC50 ~., data = datos.train, 
+                 method = "ridge", 
+                 trControl = fitControl,
+                 verbose = FALSE,
+                 preProc = c("scale", "center"),
+                 metric = "Rsquared")
+
+modelo.28
+
+modelo.28.p <- train(LOG.LC50 ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "ridge", 
+                    trControl = fitControl,
+                    preProc = c("scale", "center"),
+                    metric = "Rsquared"
+                    )
+
+modelo.28.p
+
+```
+
+\newpage
+## 2.9. Elastic net
+
+```{r}
+
+set.seed(123)
+modelo.29 <- train(LOG.LC50 ~., data = datos.train, 
+                 method = "enet", 
+                 trControl = fitControl,
+                 verbose = FALSE,
+                 preProc = c("scale", "center"),
+                 TuneGrid = expand.grid(alpha = 0),
+                 metric = "Rsquared")
+
+modelo.29
+
+modelo.29.p <- train(LOG.LC50 ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "enet", 
+                    trControl = fitControl,
+                    preProc = c("scale", "center"),
+                    TuneGrid = expand.grid(alpha = 0),
+                    metric = "Rsquared"
+                    )
+
+modelo.29.p
+
+```
+
+\newpage
+## 2.10. Robust Linear Model
+
+```{r}
+
+set.seed(1234)
+modelo.9 <- train(LOG.LC50 ~., data = datos.train, 
+                 method = "rlm", 
+                 trControl = fitControl,
+                 verbose = FALSE,
+                 preProc = c("scale", "center"),
+                 metric = "Rsquared")
+
+modelo.9
+varImp(modelo.9)
+
+modelo.9.p <- train(LOG.LC50 ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "rlm", 
+                    trControl = fitControl,
+                    verbose = FALSE,
+                    preProc = c("scale", "center"),
+                    metric = "Rsquared"
+                    )
+
+modelo.9.p
+varImp(modelo.9.p)
+
+```
+
+\newpage
+## 2.11. Gradient Broosting
+
+```{r}
+
+set.seed(1234)
+modelo.10 <- train(LOG.LC50 ~., data = datos.train, 
+                 method = "gbm", 
+                 trControl = fitControl,
+                 verbose = FALSE,
+                 preProc = c("scale", "center"),
+                 metric = "Rsquared")
+
+modelo.10
+
+modelo.10.p <- train(LOG.LC50 ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "gbm", 
+                    trControl = fitControl,
+                    verbose = FALSE,
+                    preProc = c("scale", "center"),
+                    metric = "Rsquared"
+                    )
+
+modelo.10.p
+
+
+```
+
+
+\newpage
+## 2.12. Bagged CART
+
+```{r}
+
+set.seed(1234)
+modelo.14 <- train(LOG.LC50 ~., data = datos.train, 
+                 method = "treebag", 
+                 trControl = fitControl,
+                 verbose = FALSE,
+                 preProc = c("scale", "center"),
+                 metric = "Rsquared")
+
+modelo.14
+varImp(modelo.14)
+
+modelo.14.p <- train(LOG.LC50 ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "treebag", 
+                    trControl = fitControl,
+                    verbose = FALSE,
+                    preProc = c("scale", "center"),
+                    metric = "Rsquared"
+                    )
+
+modelo.14.p
+varImp(modelo.14.p)
+
+```
+
+\newpage
+## 2.13. Bagged MARS
+
+```{r}
+
+set.seed(1234)
+modelo.15 <- train(LOG.LC50 ~., data = datos.train, 
+                 method = "bagEarth", 
+                 trControl = fitControl,
+                 preProc = c("scale", "center"),
+                 metric = "Rsquared")
+
+modelo.15
+
+modelo.15.p <- train(LOG.LC50 ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "bagEarth", 
+                    trControl = fitControl,
+                    preProc = c("scale", "center"),
+                    metric = "Rsquared"
+                    )
+
+modelo.15.p
+
+```
+
+\newpage
+## 2.14. Bagged MARS using gCV Pruning
+
+```{r}
+
+set.seed(1234)
+modelo.16 <- train(LOG.LC50 ~., data = datos.train, 
+                 method = "bagEarthGCV", 
+                 trControl = fitControl,
+                 preProc = c("scale", "center"),
+                 metric = "Rsquared")
+
+modelo.16
+
+modelo.16.p <- train(LOG.LC50 ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "bagEarthGCV", 
+                    trControl = fitControl,
+                    preProc = c("scale", "center"),
+                    metric = "Rsquared"
+                    )
+
+modelo.16.p
+
+```
+
+\newpage
+## 2.15. Bayesian Generalized Linear Model
+
+```{r}
+
+set.seed(1234)
+modelo.17 <- train(LOG.LC50 ~., data = datos.train, 
+                 method = "bayesglm", 
+                 trControl = fitControl,
+                 preProc = c("scale", "center"),
+                 metric = "Rsquared")
+
+modelo.17
+
+modelo.17.p <- train(LOG.LC50 ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "bayesglm", 
+                    trControl = fitControl,
+                    preProc = c("scale", "center"),
+                    metric = "Rsquared"
+                    )
+
+modelo.17.p
+
+```
+
+\newpage
+## 2.16. Redes neuronales
+
+```{r}
+
+set.seed(1234)
+modelo.4 <- train(LOG.LC50 ~., data = datos.train, 
+                 method = "nnet", 
+                 trControl = fitControl,
+                 verbose = FALSE,
+                 preProc = c("scale", "center"),
+                 metric = "Rsquared",
+                 trace = FALSE)
+
+modelo.4
+varImp(modelo.4)
+
+modelo.4.p <- train(LOG.LC50 ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "nnet", 
+                    trControl = fitControl,
+                    verbose = FALSE,
+                    preProc = c("scale", "center"),
+                    metric = "Rsquared",
+                    trace = FALSE
+                    )
+
+modelo.4.p
+varImp(modelo.4.p)
+
+```
+
+\newpage
+## 2.17. Máquina de Vectores de Soporte - lineal
+
+```{r}
+
+set.seed(1234)
+modelo.5 <- train(LOG.LC50 ~., data = datos.train, 
+                 method = "svmLinear", 
+                 trControl = fitControl,
+                 preProc = c("scale", "center"),
+                 metric = "Rsquared")
+
+modelo.5
+
+modelo.5.p <- train(LOG.LC50 ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "svmLinear", 
+                    trControl = fitControl,
+                    verbose = FALSE,
+                    preProc = c("scale", "center"),
+                    metric = "Rsquared"
+                    )
+
+modelo.5.p
+
+```
+
+\newpage
+## 2.18. Máquina de Vectores de Soporte - radial
+
+```{r}
+
+set.seed(1234)
+modelo.7 <- train(LOG.LC50 ~., data = datos.train, 
+                 method = "svmRadial", 
+                 trControl = fitControl,
+                 verbose = FALSE,
+                 preProc = c("scale", "center"),
+                 metric = "Rsquared")
+
+modelo.7
+
+modelo.7.p <- train(LOG.LC50 ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "svmRadial", 
+                    trControl = fitControl,
+                    verbose = FALSE,
+                    preProc = c("scale", "center"),
+                    metric = "Rsquared"
+                    )
+
+modelo.7.p
+
+```
+
+\newpage
+## 2.19. Support Vector Machines with Polynomial Kernel
+
+```{r}
+
+set.seed(123)
+modelo.23 <- train(LOG.LC50 ~., data = datos.train, 
+                 method = "svmPoly", 
+                 trControl = fitControl,
+                 verbose = FALSE,
+                 preProc = c("scale", "center"),
+                 metric = "Rsquared")
+
+modelo.23
+
+modelo.23.p <- train(LOG.LC50 ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "svmPoly", 
+                    trControl = fitControl,
+                    verbose = FALSE,
+                    preProc = c("scale", "center"),
+                    metric = "Rsquared"
+                    )
+
+modelo.23.p
+
+```
+
+\newpage
+## 2.20. svmLinear3
+
+```{r}
+
+set.seed(123)
+modelo.30 <- train(LOG.LC50 ~., data = datos.train, 
+                 method = "svmLinear3", 
+                 preProc = c("scale", "center"),
+                 trControl = fitControl,
+                 verbose = FALSE,
+                 metric = "Rsquared")
+
+modelo.30
+
+modelo.30.p <- train(LOG.LC50 ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "svmLinear3", 
+                    preProc = c("scale", "center"),
+                    trControl = fitControl,
+                    verbose = FALSE,
+                    metric = "Rsquared"
+                    )
+
+modelo.30.p
+
+```
+
+\newpage
+## 2.21. Arbol de regresión
+
+```{r}
+
+set.seed(123)
+modelo.3 <- train(LOG.LC50 ~., data = datos.train, 
+                 method = "rpart2", 
+                 trControl = fitControl,
+                 preProc = c("scale", "center"),
+                 metric = "Rsquared")
+
+modelo.3
+
+modelo.3.p <- train(LOG.LC50 ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "rpart2", 
+                    trControl = fitControl,
+                    preProc = c("scale", "center"),
+                    metric = "Rsquared"
+                    )
+
+modelo.3.p
+
+```
+
+
+\newpage
+## 2.22. Árbol de modelo
+
+```{r}
+
+set.seed(123)
+modelo.8 <- train(LOG.LC50 ~., data = datos.train, 
+                 method = "M5", 
+                 trControl = fitControl,
+                 preProc = c("scale", "center"),
+                 metric = "Rsquared")
+
+modelo.8
+
+modelo.8.p <- train(LOG.LC50 ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "M5", 
+                    trControl = fitControl,
+                    preProc = c("scale", "center"),
+                    metric = "Rsquared"
+                    )
+
+modelo.8.p
+
+```
+
+
+\newpage
+## 2.23. Random forest
+
+```{r}
+
+set.seed(123)
+modelo.11 <- train(LOG.LC50 ~., data = datos.train, 
+                 method = "rf", 
+                 trControl = fitControl,
+                 verbose = FALSE,
+                 preProc = c("scale", "center"),
+                 metric = "Rsquared")
+
+modelo.11
+
+modelo.11.p <- train(LOG.LC50 ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "rf", 
+                    trControl = fitControl,
+                    verbose = FALSE,
+                    preProc = c("scale", "center"),
+                    metric = "Rsquared"
+                    )
+
+modelo.11.p
+
+```
+
+
+\newpage
+## 2.24. Boosted Tree
+
+```{r}
+
+set.seed(123)
+modelo.18 <- train(LOG.LC50 ~., data = datos.train, 
+                 method = "blackboost", 
+                 trControl = fitControl,
+                 preProc = c("scale", "center"),
+                 metric = "Rsquared")
+
+modelo.18
+
+modelo.18.p <- train(LOG.LC50 ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "blackboost", 
+                    trControl = fitControl,
+                    preProc = c("scale", "center"),
+                    metric = "Rsquared"
+                    )
+
+modelo.18.p
+
+```
+
+\newpage
+## 2.25. elastic net regression
+
+```{r}
+
+set.seed(123)
+modelo.26 <- train(LOG.LC50 ~., data = datos.train, 
+                 method = "glmnet", 
+                 preProc = c("scale", "center"),
+                 trControl = fitControl,
+                 verbose = FALSE,
+                 metric = "Rsquared")
+
+modelo.26
+
+modelo.26.p <- train(LOG.LC50 ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "glmnet", 
+                    trControl = fitControl,
+                    preProc = c("scale", "center"),
+                    metric = "Rsquared"
+                    )
+
+modelo.26.p
+
+```
+
+\newpage
+## 2.26. Tree Models from Genetic Algorithms
+
+```{r}
+
+set.seed(123)
+modelo.27 <- train(LOG.LC50 ~., data = datos.train, 
+                 method = "evtree", 
+                 preProc = c("scale", "center"),
+                 trControl = fitControl,
+                 verbose = FALSE,
+                 metric = "Rsquared")
+
+modelo.27
+
+modelo.27.p <- train(LOG.LC50 ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "evtree", 
+                    preProc = c("scale", "center"),
+                    trControl = fitControl,
+                    metric = "Rsquared"
+                    )
+
+modelo.27.p
+
+```
+
+
+\newpage
+
+# 3. Comparaciones 
+
+## 3.1 modelos con 8 predictores
+
+```{r }
+
+modelos <- resamples(list(
+                
+                glmStepAIC = modelo.12,
+                pls = modelo.13,
+                ranger  = modelo.19,
+                cubist = modelo.20,
+                gaussprLinear = modelo.21,
+                gam = modelo.22,
+                lasso = modelo.6,
+                rlm = modelo.9,
+                gbm = modelo.10,
+                treebag = modelo.14,
+                bagEarth = modelo.15,
+                agEarthGCV = modelo.16,
+                bayesglm = modelo.17,
+                nnet = modelo.4,
+                svmLinear = modelo.5,
+                svmRadial = modelo.7,
+                svmPoly = modelo.23,
+                rpart2 = modelo.3,
+                M5 = modelo.8,
+                rf = modelo.11,
+                blackboost = modelo.18,
+                glmnet = modelo.26,
+                evtree = modelo.27,
+                ridge = modelo.28,
+                enet = modelo.29,
+                svmLinear3 = modelo.30
+                ))
+
+summary(modelos)
+
+bwplot(modelos)
+
+dotplot(modelos)
+
+```
+
+\newpage
+
+## 3.2 modelos con 4 predictores
+
+```{r }
+
+modelos.p <- resamples(list(
+                
+                glmStepAIC = modelo.12.p,
+                pls = modelo.13.p,
+                ranger  = modelo.19.p,
+                cubist = modelo.20.p,
+                gaussprLinear = modelo.21.p,
+                gam = modelo.22.p,
+                lasso = modelo.6.p,
+                rlm = modelo.9.p,
+                gbm = modelo.10.p,
+                treebag = modelo.14.p,
+                bagEarth = modelo.15.p,
+                agEarthGCV = modelo.16.p,
+                bayesglm = modelo.17.p,
+                nnet = modelo.4.p,
+                svmLinear = modelo.5.p,
+                svmRadial = modelo.7.p,
+                svmPoly = modelo.23.p,
+                rpart2 = modelo.3.p,
+                M5 = modelo.8.p,
+                rf = modelo.11.p,
+                blackboost = modelo.18.p,
+                glmnet = modelo.26.p,
+                evtree = modelo.27.p,
+                ridge = modelo.28.p,
+                enet = modelo.29.p,
+                svmLinear3 = modelo.30.p
+                ))
+
+summary(modelos.p)
+
+bwplot(modelos.p)
+
+dotplot(modelos.p)
+
+```
+
+\newpage
+
+## 3.3 comparación entre modelos 4 y 8 predictores
+
+```{r }
+
+
+compare_models(modelo.3, modelo.3.p)
+compare_models(modelo.4, modelo.4.p)
+compare_models(modelo.5, modelo.5.p)
+
+compare_models(modelo.6, modelo.6.p)
+compare_models(modelo.7, modelo.7.p)
+compare_models(modelo.8, modelo.8.p)
+compare_models(modelo.9, modelo.9.p)
+compare_models(modelo.10, modelo.10.p)
+
+compare_models(modelo.11, modelo.11.p)
+compare_models(modelo.12, modelo.12.p)
+compare_models(modelo.13, modelo.13.p)
+compare_models(modelo.14, modelo.14.p)
+compare_models(modelo.15, modelo.15.p)
+
+compare_models(modelo.16, modelo.16.p)
+compare_models(modelo.17, modelo.17.p)
+compare_models(modelo.18, modelo.18.p)
+compare_models(modelo.19, modelo.19.p)
+compare_models(modelo.20, modelo.20.p)
+
+compare_models(modelo.21, modelo.21.p)
+compare_models(modelo.22, modelo.22.p)
+compare_models(modelo.23, modelo.23.p)
+
+
+compare_models(modelo.26, modelo.26.p)
+compare_models(modelo.27, modelo.27.p)
+compare_models(modelo.28, modelo.28.p)
+compare_models(modelo.29, modelo.29.p)
+compare_models(modelo.30, modelo.30.p)
+
+```
+
+

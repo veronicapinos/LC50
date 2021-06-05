@@ -1,0 +1,732 @@
+---
+title: "Clasificación CV 5 algoritmos"
+author: "Verónica Pinos Vélez"
+date: "14/04/2021"
+output:
+  pdf_document:
+    latex_engine: xelatex
+    toc: yes
+    toc_depth: 2
+  word_document:
+    toc: yes
+    toc_depth: '2'
+  html_document:
+    toc: yes
+    toc_depth: 2
+    toc_float: yes
+subtitle: PEC2
+---
+```{r, echo=FALSE}
+htmltools::img(src = knitr::image_uri( "logo_uoc_petit.png"), 
+               alt = 'logo UOC', 
+               style = 'position:absolute; top:0; right:0; padding:10px;')
+htmltools::img(src = knitr::image_uri( "logo_ub_petit.png"), 
+               alt = 'logo UB', 
+               style = 'position:absolute; top:0; left:0; padding:10px;')
+```
+<style type="text/css">
+
+h1.title {
+  font-size: 18px;
+  color: DarkRed;
+  text-align: center;
+}
+h3.subtitle {
+  font-size: 18px;
+  color: DarkBlue;
+  text-align: center;
+}
+h4.author { /* Header 4 - and the author and data headers use this too  */
+    font-size: 18px;
+  font-family: "Times New Roman", Times, serif;
+  color: DarkBlue;
+  text-align: center;
+}
+h4.date { /* Header 4 - and the author and data headers use this too  */
+  font-size: 18px;
+  font-family: "Times New Roman", Times, serif;
+  color: DarkBlue;
+  text-align: center;
+}
+</style>
+
+
+```{r setup, include = FALSE}
+
+# knitr options
+knitr::opts_chunk$set(echo = TRUE, 
+                      message = FALSE, 
+                      warning = FALSE, 
+                      comment = NULL, 
+                      prompt = TRUE, 
+                      tidy = FALSE, 
+                      fig.width = 7, 
+                      fig.height = 7, 
+                      fig_caption = TRUE,
+                      cache = TRUE)
+
+```
+
+```{r libraries, include = FALSE}
+
+library(knitr)
+library("citr")
+library(readr)
+library(tidyverse)
+library(caret)
+library(ggpubr) 
+library(skimr) # summary gráfico
+library(nortest) # pruebas de normalidad
+library(GGally) # correlación
+library(psych) # correlación
+library(PerformanceAnalytics ) # correlaciones
+library(modelgrid) # entrenar simultáneamente varios modelos
+library(readxl)
+
+```
+
+\newpage
+
+# Base de datos
+
+```{r}
+
+qsar.aq.tox <- read_excel("qsar_aquatic_toxicity_cat.xlsx")
+
+qsar.aq.tox <- data.frame(qsar.aq.tox)
+
+str(qsar.aq.tox)
+
+qsar.aq.tox$Toxicidad <- factor(qsar.aq.tox$Toxicidad)
+
+str(qsar.aq.tox)
+
+ggplot(data = qsar.aq.tox, aes(x = Toxicidad, y = ..count.., fill = Toxicidad)) +
+  geom_bar() +
+  scale_fill_manual(values = c("darkblue", "darkred")) +
+  labs(title = "Toxicidad") +
+  theme_bw() +
+  theme(legend.position = "bottom")
+
+
+```
+
+
+## Separación en entrenamiento y test
+
+```{r}
+
+# Separamos los datos 
+set.seed(1234) # Fijamos la semilla para obtener los mismos resultados
+index <- createDataPartition(qsar.aq.tox$Toxicidad, 
+                                  p = .80, list = FALSE, times = 1)
+
+datos.train <- qsar.aq.tox[index,] # crea train desde el índice 
+datos.test <- qsar.aq.tox[-index,] # crea test desde el índice
+
+```
+
+## Validación Cruzada
+
+```{r}
+
+cv.index <- createFolds(y = datos.train$Toxicidad,
+                        k = 5,
+                        list = TRUE,
+                        returnTrain = TRUE)
+
+
+fitControl <- trainControl(index = cv.index,
+                           method = "cv",
+                           number = 5)
+
+
+```
+
+
+\newpage
+
+# 3. Con y Sin extremos
+
+## 3.1 Máquina de Vectores de Soporte radial
+
+```{r}
+
+set.seed(1234)
+
+# Entrenamiento del modelo con los 8 predictores
+
+hiperparametros <-  expand.grid(sigma = c(.16, 0.17, 0.18, 0.5, 0.55, 0.6, 0.7, 1, 2),
+                                C = c(0.75, 1, 1.25, 1.5, 1.75, 2))
+
+
+
+modelo.svm.r <- train(Toxicidad ~ . , 
+                 data = datos.train,
+                 method = "svmRadial",
+                 trControl = fitControl,
+                 verbose = FALSE,
+                 prior = c(0.5, 0.5),
+                 tuneGrid = hiperparametros
+                 )
+               
+kable(round(modelo.svm.r$results, 3))
+
+ggplot(modelo.svm.r)
+
+kable(modelo.svm.r$bestTune)
+
+# Evaluación
+predicciones <- predict(modelo.svm.r, datos.test)
+confusionMatrix(predicciones, datos.test$Toxicidad)
+
+# Entrenamiento del modelo con los 4 predictores
+
+modelo.svm.r.p <- train(Toxicidad ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "svmRadial", 
+                    trControl = fitControl,
+                    verbose = FALSE,
+                    metric = "Accuracy",
+                    prior = c(0.5, 0.5),
+                 tuneGrid = hiperparametros
+                    )
+               
+kable(round(modelo.svm.r.p$results, 3))
+
+ggplot(modelo.svm.r.p)
+
+kable(modelo.svm.r.p$bestTune)
+
+# Evaluación
+predicciones <- predict(modelo.svm.r.p, datos.test)
+confusionMatrix(predicciones, datos.test$Toxicidad)
+
+```
+
+\newpage
+
+```{r}
+
+set.seed(1234)
+
+Ind <- c(12, 13, 15, 21, 23, 29, 37, 40, 44, 47, 54, 55, 56, 62, 65, 77, 82,
+         83, 86, 90, 92, 94, 95, 97, 98, 108, 111, 114, 125, 126, 138, 141, 142,
+         143, 202, 210, 213, 217, 218, 235, 255, 257, 258, 259, 263, 264, 286, 287,
+         295, 315, 322, 325, 326, 343, 347, 353, 357, 358, 363, 370, 386, 394, 399,
+         411, 413, 417, 418, 422, 424, 429, 430, 432, 473, 483)
+
+qsar.aq.tox.se <- qsar.aq.tox[c(-Ind), ]
+
+index <- createDataPartition(qsar.aq.tox.se$Toxicidad,
+ p = .80,
+ list = FALSE)
+
+ datos.train.se <- qsar.aq.tox.se[index,] # crea train desde el índice
+ datos.test.se <- qsar.aq.tox.se[-index,] # crea test desde el índice
+
+ fitControl.se <- trainControl(index = createFolds(y = datos.train.se$Toxicidad,
+                                                   k = 5,
+                                                   list = TRUE,
+                                                   returnTrain = TRUE), 
+                                                   method = "cv",
+                                                   number = 5)
+ 
+
+modelo.svm.r.p.es <- train(Toxicidad ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train.se, 
+                    method = "svmRadial", 
+                    trControl = fitControl.se,
+                    verbose = FALSE,
+                    prior = c(0.5, 0.5),
+                    metric = "Accuracy",
+                    tuneGrid = hiperparametros
+                    )
+               
+kable(round(modelo.svm.r.p.es$results, 3))
+
+ggplot(modelo.svm.r.p.es)
+
+kable(modelo.svm.r.p.es$bestTune)
+
+save(modelo.svm.r.p.es , file = 'LC50rvmrexcvclass.rda')
+
+# Evaluación
+predicciones.es <- predict(modelo.svm.r.p.es, datos.test.se)
+confusionMatrix(predicciones.es, datos.test.se$Toxicidad)
+  
+```
+
+
+\newpage
+
+## 3.2 Redes neuronales
+
+```{r}
+
+set.seed(1234)
+
+hiperparametros <- expand.grid(size = seq(from = 1, to = 10, by = 1),
+                               decay = seq(from = 0.05, to = 0.5, by = 0.1))
+
+# Entrenamiento del modelo con los 8 predictores
+
+modelo.nne <- train(Toxicidad ~., data = datos.train, 
+                 method = "nnet", 
+                 trControl = fitControl,
+                 metric = "Accuracy",
+                 prior = c(0.5, 0.5),
+                 tuneGrid = hiperparametros,
+                 trace = FALSE
+                 )
+
+modelo.nne$finalModel
+modelo.nne$results 
+
+# Evaluación
+predicciones <- predict(modelo.nne, datos.test)
+confusionMatrix(predicciones, datos.test$Toxicidad)
+
+# Entrenamiento del modelo con los 4 predictores
+
+
+modelo.nne.p <- train(Toxicidad ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "nnet", 
+                    trControl = fitControl,
+                    metric = "Accuracy",
+                    prior = c(0.5, 0.5),
+                    tuneGrid = hiperparametros,
+                    trace = FALSE
+                    )
+
+modelo.nne.p$finalModel
+modelo.nne.p$results 
+
+# Evaluación
+predicciones <- predict(modelo.nne.p, datos.test)
+confusionMatrix(predicciones, datos.test$Toxicidad)
+
+```
+
+\newpage
+
+```{r}
+
+# Sin extremos
+
+# Entrenamiento del modelo con los 4 predictores
+
+modelo.nne.p <- train(Toxicidad ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train.se, 
+                    method = "nnet", 
+                    trControl = fitControl.se,
+                    metric = "Accuracy",
+                    prior = c(0.5, 0.5),
+                    tuneGrid = hiperparametros,
+                    trace = FALSE
+                    )
+
+modelo.nne.p$finalModel
+modelo.nne.p$results 
+
+# Evaluación
+predicciones <- predict(modelo.nne.p, datos.test.se)
+confusionMatrix(predicciones, datos.test.se$Toxicidad)
+
+
+```
+
+
+\newpage
+
+## 3.3 Random forest
+
+*Entrenamiento*
+
+```{r}
+
+set.seed(1234)
+
+hiperparametros <-  data.frame(mtry = seq(0, 3, by = 0.05))
+
+
+modelo.rf <- train(Toxicidad ~ . , 
+                 data = datos.train, 
+                 method = "rf", 
+                 trControl = fitControl,
+                 verbose = FALSE,
+                 metric = "Accuracy",
+                 tuneGrid = hiperparametros,
+                 prior = c(0.5, 0.5)
+                 )
+
+
+kable(round(modelo.rf$results, 3))
+
+ggplot(modelo.rf)
+
+kable(modelo.rf$bestTune)
+
+varImp(modelo.rf)
+
+# Evaluación
+predicciones <- predict(modelo.rf, datos.test)
+confusionMatrix(predicciones, datos.test$Toxicidad)
+
+# Entrenamiento del modelo con los 4 predictores
+
+modelo.rf.p <- train(Toxicidad ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "rf", 
+                    trControl = fitControl,
+                    metric = "Accuracy",
+                    tuneGrid = hiperparametros,
+                    prior = c(0.5, 0.5)
+                    )
+
+kable(round(modelo.rf.p$results, 3))
+
+ggplot(modelo.rf.p)
+
+kable(modelo.rf.p$bestTune)
+
+varImp(modelo.rf.p)
+
+# Evaluación
+predicciones <- predict(modelo.rf.p, datos.test)
+confusionMatrix(predicciones, datos.test$Toxicidad)
+
+```
+
+\newpage
+
+
+```{r}
+
+set.seed(1234)
+
+Ind <- c(6, 15, 23, 44, 56, 77, 82, 90, 92, 94, 95, 98, 125, 138, 141, 143, 153, 179, 183,
+         204, 210, 255, 258, 264, 279, 309, 315, 325, 326, 332, 353, 357, 358, 363, 394, 411,
+         413, 417, 418, 423, 442, 463, 473)
+
+qsar.aq.tox.se <- qsar.aq.tox[c(-Ind), ]
+
+index <- createDataPartition(qsar.aq.tox.se$Toxicidad,
+                             p = .80,
+                             list = FALSE)
+
+ datos.train.se <- qsar.aq.tox.se[index,] # crea train desde el índice
+ datos.test.se <- qsar.aq.tox.se[-index,] # crea test desde el índice
+
+ fitControl.se <- trainControl(index = createFolds(y = datos.train.se$Toxicidad,
+                                                   k = 5,
+                                                   list = TRUE,
+                                                   returnTrain = TRUE), 
+                                                   method = "cv",
+                                                   number = 5)
+ 
+
+hiperparametros <-  data.frame(mtry = seq(1, 3, by = 0.05))
+
+modelo.rf.p <- train(Toxicidad ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train.se, 
+                    method = "rf", 
+                    trControl = fitControl.se,
+                    verbose = FALSE,
+                    prior = c(0.5, 0.5),
+                    metric = "Accuracy",
+                    tuneGrid = hiperparametros
+                    )
+               
+kable(round(modelo.rf.p$results, 3))
+
+ggplot(modelo.rf.p)
+
+kable(modelo.rf.p$bestTune)
+
+# Evaluación
+predicciones <- predict(modelo.rf.p, datos.test.se)
+confusionMatrix(predicciones, datos.test.se$Toxicidad)
+  
+```
+
+
+\newpage
+
+## 3.4 Gradient Broosting
+
+```{r}
+
+set.seed(1234)
+
+# Entrenamiento del modelo con los 8 predictores
+
+hiperparametros <-  expand.grid(interaction.depth = c(2, 3, 5, 6, 7, 8, 9, 10), 
+                           n.trees = (1:20)*10, 
+                           shrinkage = c(0.005, 0.01, 0.05, 0.1, 0.2, 0.3),
+                           n.minobsinnode = c(0.5, 1, 2, 3, 5, 10, 12, 15)
+                           )
+
+
+modelo.gbm <- train(Toxicidad ~ . , 
+                 data = datos.train, 
+                 method = "gbm", 
+                 trControl = fitControl,
+                 metric = "Accuracy",
+                 verbose = FALSE,
+                 tuneGrid = hiperparametros
+                 )
+
+kable(round(modelo.gbm$results, 3))
+
+ggplot(modelo.gbm)
+
+modelo.gbm$bestTune
+
+# Evaluación
+predicciones <- predict(modelo.gbm, datos.test)
+confusionMatrix(predicciones, datos.test$Toxicidad)
+
+
+# Entrenamiento del modelo con los 4 predictores
+
+modelo.gbm.p <- train(Toxicidad ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train, 
+                    method = "gbm", 
+                    trControl = fitControl,
+                    metric = "Accuracy",
+                    verbose = FALSE,
+                    tuneGrid = hiperparametros
+                    )
+
+kable(round(modelo.gbm.p$results, 3))
+
+ggplot(modelo.gbm.p)
+
+modelo.gbm.p$bestTune
+
+# Evaluación
+predicciones <- predict(modelo.gbm.p, datos.test)
+confusionMatrix(predicciones, datos.test$Toxicidad)
+
+```
+
+\newpage
+
+
+```{r}
+
+set.seed(1234)
+
+Ind <- c(23, 36, 44, 53, 84, 90, 94, 106, 138, 143, 153, 204, 210, 218, 228, 258, 267,
+         279, 290, 297, 309, 325, 326, 332, 357, 358, 370, 394, 408, 429, 442, 458, 463, 473)
+
+qsar.aq.tox.se <- qsar.aq.tox[c(-Ind), ]
+
+index <- createDataPartition(qsar.aq.tox.se$Toxicidad,
+                             p = .80,
+                             list = FALSE)
+
+ datos.train.se <- qsar.aq.tox.se[index,] # crea train desde el índice
+ datos.test.se <- qsar.aq.tox.se[-index,] # crea test desde el índice
+
+ fitControl.se <- trainControl(index = createFolds(y = datos.train.se$Toxicidad,
+                                                   k = 5,
+                                                   list = TRUE,
+                                                   returnTrain = TRUE), 
+                                                   method = "cv",
+                                                   number = 5)
+ 
+
+ 
+hiperparametros <-  expand.grid(interaction.depth = c(2, 3, 4, 7, 8, 9, 10),
+                                n.trees = (1:20)*50,
+                                shrinkage = c(0.05, 0.1, 0.2, 0.5),
+                                n.minobsinnode = c(1, 2, 5, 10, 11, 12, 13, 14, 15))
+
+modelo.gbm.p <- train(Toxicidad ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train.se, 
+                    method = "gbm", 
+                    trControl = fitControl.se,
+                    verbose = FALSE,
+                    metric = "Accuracy",
+                    tuneGrid = hiperparametros
+                    )
+               
+kable(round(modelo.gbm.p$results, 3))
+
+ggplot(modelo.gbm.p)
+
+kable(modelo.gbm.p$bestTune)
+
+# Evaluación
+predicciones <- predict(modelo.gbm.p, datos.test.se)
+confusionMatrix(predicciones, datos.test.se$Toxicidad)
+  
+```
+
+\newpage
+
+## 3.5 Random forest ranger
+
+
+```{r}
+
+set.seed(1234)
+
+# Entrenamiento del modelo con los 8 predictores
+
+hiperparametros <-  data.frame(.mtry = c(1, 2, 3, 4),
+                       .splitrule = "extratrees",
+                       .min.node.size = 5
+                       )
+
+ 
+modelo.ranger <- train(Toxicidad ~., data = datos.train,
+                  method = "ranger", 
+                  metric = "Accuracy",
+                  trControl = fitControl,
+                  tuneGrid = hiperparametros
+                  )
+
+kable(modelo.ranger$results)
+
+kable(modelo.ranger$bestTune)
+
+
+# Evaluación
+predicciones <- predict(modelo.ranger, datos.test)
+confusionMatrix(predicciones, datos.test$Toxicidad)
+
+# Entrenamiento del modelo con los 4 predictores
+
+
+modelo.ranger.p <- train(Toxicidad ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                  data = datos.train,
+                  method = "ranger", 
+                  metric = "Accuracy",
+                  trControl = fitControl,
+                  tuneGrid = hiperparametros
+                  )
+
+kable(modelo.ranger.p$results)
+
+kable(modelo.ranger.p$bestTune)
+
+# Evaluación
+predicciones <- predict(modelo.ranger.p, datos.test)
+confusionMatrix(predicciones, datos.test$Toxicidad)
+
+```
+
+\newpage
+
+
+```{r}
+
+set.seed(1234)
+
+Ind <- c(6, 15, 18, 23, 44, 56, 78, 82, 86, 90, 92, 94, 95, 98, 108, 125, 130, 138, 141,
+         143, 179, 183, 204, 210, 218, 255, 258, 264, 279, 315, 325, 326, 332, 349, 353,
+         357, 358, 363, 394, 411, 413, 417, 418, 423, 429, 432, 442, 463, 465, 473)
+
+qsar.aq.tox.se <- qsar.aq.tox[c(-Ind), ]
+
+index <- createDataPartition(qsar.aq.tox.se$Toxicidad,
+                             p = .80,
+                             list = FALSE)
+
+ datos.train.se <- qsar.aq.tox.se[index,] # crea train desde el índice
+ datos.test.se <- qsar.aq.tox.se[-index,] # crea test desde el índice
+
+ fitControl.se <- trainControl(index = createFolds(y = datos.train.se$Toxicidad,
+                                                   k = 5,
+                                                   list = TRUE,
+                                                   returnTrain = TRUE), 
+                                                   method = "cv",
+                                                   number = 5)
+ 
+
+ 
+hiperparametros <-  data.frame(.mtry = c(1, 2, 3, 4),
+                               .splitrule = "gini", 
+                               .min.node.size = 2)
+
+modelo.r.p <- train(Toxicidad ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train.se, 
+                    method = "ranger", 
+                    trControl = fitControl.se,
+                    metric = "Accuracy",
+                    tuneGrid = hiperparametros
+                    )
+               
+
+
+modelo.r.p$results 
+
+ggplot(modelo.r.p)
+
+kable(modelo.r.p$bestTune)
+
+# Evaluación
+predicciones <- predict(modelo.r.p, datos.test.se)
+confusionMatrix(predicciones, datos.test.se$Toxicidad)
+  
+```
+
+
+
+
+```{r}
+
+set.seed(1234)
+
+Ind <- c(6, 15, 18, 23, 44, 56, 78, 82, 86, 90, 92, 94, 95, 98, 108, 125, 130, 138, 141,
+         143, 179, 183, 204, 210, 218, 255, 258, 264, 279, 315, 325, 326, 332, 349, 353,
+         357, 358, 363, 394, 411, 413, 417, 418, 423, 429, 432, 442, 463, 465, 473)
+
+qsar.aq.tox.se <- qsar.aq.tox[c(-Ind), ]
+
+index <- createDataPartition(qsar.aq.tox.se$Toxicidad,
+                             p = .80,
+                             list = FALSE)
+
+ datos.train.se <- qsar.aq.tox.se[index,] # crea train desde el índice
+ datos.test.se <- qsar.aq.tox.se[-index,] # crea test desde el índice
+
+ fitControl.se <- trainControl(index = createFolds(y = datos.train.se$Toxicidad,
+                                                   k = 5,
+                                                   list = TRUE,
+                                                   returnTrain = TRUE), 
+                                                   method = "cv",
+                                                   number = 5)
+ 
+
+ 
+hiperparametros <-  data.frame(.mtry = c(1, 2, 3, 4),
+                               .splitrule = "extratrees", 
+                               .min.node.size = 2)
+
+modelo.r.p <- train(Toxicidad ~ TPSA.Tot + H.050 + MLOGP + RDCHI, 
+                    data = datos.train.se, 
+                    method = "ranger", 
+                    trControl = fitControl.se,
+                    metric = "Accuracy",
+                    tuneGrid = hiperparametros
+                    )
+               
+
+
+modelo.r.p$results 
+
+ggplot(modelo.r.p)
+
+kable(modelo.r.p$bestTune)
+
+# Evaluación
+predicciones <- predict(modelo.r.p, datos.test.se)
+confusionMatrix(predicciones, datos.test.se$Toxicidad)
+  
+```
+
